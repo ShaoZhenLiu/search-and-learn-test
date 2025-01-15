@@ -19,7 +19,6 @@ pip install -e '.[dev]'
 
 # Configuration
 
-# Replicating Scaling Test Time Compute results:
 The [recipes readme](recipes/README.md) includes launch commands and config files in order to replicate our results.
 
 基本的参数都在 `src/sal/config.py` 中，如果有参数想要设置，可以设置在 `recipes` 中，并在运行的时候将该路径作为第二个参数，比如：
