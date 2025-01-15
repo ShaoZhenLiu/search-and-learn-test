@@ -1,40 +1,37 @@
-# Search and Learn
+本项目基于 [Search and Learn](https://github.com/huggingface/search-and-learn) 制作
+# 项目名字
 
-> One thing that should be learned from [the bitter lesson](http://www.incompleteideas.net/IncIdeas/BitterLesson.html) is the great power of general purpose methods, of methods that continue to scale with increased computation even as the available computation becomes very great. The two methods that seem to scale arbitrarily in this way are _**search**_ and _**learning**_.
+> 描述
 
 # Installation
 
 ```shell
 conda create -n sal python=3.10 && conda activate sal
 ```
+
+创建万环境后，安装pytorch，然后运行下面的命令
+
 ```shell
 pip install -e '.[dev]'
 ```
 
+环境就基本上创建完成了
 
-## Replicating Scaling Test Time Compute results:
+# Configuration
+
+# Replicating Scaling Test Time Compute results:
 The [recipes readme](recipes/README.md) includes launch commands and config files in order to replicate our results.
 
+基本的参数都在 `src/sal/config.py` 中，如果有参数想要设置，可以设置在 `recipes` 中，并在运行的时候将该路径作为第二个参数，比如：
 
-## Citation
-If you use this codebase or the blogpost it would be great if you could cite us:
 ```
-@misc{beeching2024scalingtesttimecompute,
-      title={Scaling test-time compute with open models},
-      author={Edward Beeching and Lewis Tunstall and Sasha Rush},
-      url={https://huggingface.co/spaces/HuggingFaceH4/blogpost-scaling-test-time-compute},
-}
-```
-Please also cite this work:
-```
-@misc{snell2024scalingllmtesttimecompute,
-      title={Scaling LLM Test-Time Compute Optimally can be More Effective than Scaling Model Parameters}, 
-      author={Charlie Snell and Jaehoon Lee and Kelvin Xu and Aviral Kumar},
-      year={2024},
-      eprint={2408.03314},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG},
-      url={https://arxiv.org/abs/2408.03314}, 
-}
+python scripts/test_time_compute.py <YAML_CONFIG>
+# for example:
+python scripts/test_time_compute.py recipes/Llama-3.1-8B-Instruct/diff_of_n.yaml
 ```
 
+上访的代码也是直接运行程序的基本代码，`scripts/test_time_compute.py` 是入口，目前默认运行的是 diff_of_n 方法。
+
+本仓库中有有关 PRM 的方法，不过因为我们在生成数据的时候用不上它们，所以不用管它们。
+
+别的就没啥需要注意的了，目前主要改写的代码是在 `src/sal/inference` 中，基本上只需要查看它们即可。
