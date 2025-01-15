@@ -1,0 +1,8 @@
+# refer to src/sal/config.py for more options
+
+filter_duplicates: true
+approach: iter_gen
+search_batch_size: 1
+dataset_start: 0
+dataset_end: 25
+seed: 42
