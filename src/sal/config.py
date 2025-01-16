@@ -40,7 +40,7 @@ class Config:
     apply_voting: bool = True
 
     # Dataset Related Options
-    dataset_name: str = "/diff_of_n_data/shaozhen.liu/python_project/hf_datasets/MATH-500"
+    dataset_name: str = "/data/shaozhen.liu/python_project/hf_datasets/MATH-500"
     dataset_config: str = None
     dataset_split: str = "test"
     dataset_start: int = None
