@@ -1,5 +1,5 @@
 #!/bin/bash
 
-export CUDA_VISIBLE_DEVICES=0,1
+export CUDA_VISIBLE_DEVICES=2,3
 
-python test_time_compute.py
+python scripts/test_time_compute.py recipes/Llama-3.1-8B-Instruct/diff_of_n.yaml
