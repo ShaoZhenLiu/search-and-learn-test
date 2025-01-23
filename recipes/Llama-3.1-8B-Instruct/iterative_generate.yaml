@@ -6,3 +6,5 @@ search_batch_size: 1
 dataset_start: 0
 dataset_end: 25
 seed: 42
+
+output_dir: ./iter_gen_data
