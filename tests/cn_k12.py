@@ -13,3 +13,4 @@ from datasets import load_dataset
 
 if __name__ == '__main__':
     dataset = load_dataset(path="./cn_k12", split="train")
+    print(dataset)
