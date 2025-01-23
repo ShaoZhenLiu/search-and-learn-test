@@ -74,6 +74,10 @@ def main():
     # # 然后根据 dataset 中的解和打分，生成最好的答案
     # dataset = score(dataset, config)
 
+    if config.approach == "diff_of_n":
+        # 如果属性 k_diff_solutions 或 pred_res 分别是 [] 和 None 的话，说明该目标生成失败，需要过滤掉
+        dataset = dataset.filter(lambda x: (x["k_diff_solutions"] != []) and (x["pred_res"] is not None))
+
     save_dataset(dataset, config)
     logger.info("Done 🔥!")
 

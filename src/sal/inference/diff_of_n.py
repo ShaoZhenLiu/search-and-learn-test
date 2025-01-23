@@ -42,9 +42,9 @@ def _diff_of_n(batch_of_prompts, config: Config, llm: LLM) -> dict:
     #     f"step{i}_res": ["" for _ in range(len(batch_of_prompts))] for i in range(4)
     # }
 
-    step_result_tokens = {
-        f"step{i}_res": [0 for _ in range(len(batch_of_prompts))] for i in range(4)
-    }
+    # step_result_tokens = {
+    #     f"step{i}_res": [0 for _ in range(len(batch_of_prompts))] for i in range(4)
+    # }
 
     n_solutions = [[] for _ in range(len(batch_of_prompts))]
     from_n_to_k = ["" for _ in range(len(batch_of_prompts))]
@@ -81,7 +81,7 @@ def _diff_of_n(batch_of_prompts, config: Config, llm: LLM) -> dict:
             temperature=config.temperature,
             max_tokens=config.max_tokens,
             top_p=config.top_p,  # 解码过程中，概率累积到多少的时候截断
-            # top_k=config.top_k,
+            top_k=config.top_k,
             # best_of=config.n,  # 每次都生成n个
             n=config.n if i == 0 else 1,  # 第一次返回n个，之后就只返回1个
         )
@@ -109,19 +109,21 @@ def _diff_of_n(batch_of_prompts, config: Config, llm: LLM) -> dict:
             ]
             def func(text):
                 try:
-                    return regex.findall(config.reg_for_number, regex.search(config.reg_for_box, text).group(1))
+                    return list(map(int,
+                        regex.findall(config.reg_for_number, regex.search(config.reg_for_box, text).group(1))
+                    ))
                 except:
-                    return None
+                    return None  # 匹配不出来就返回None，之后就都是None了
             k_diff_solutions_indices = [
-                list(map(int, func(text)))
+                func(text)
                 for text in from_n_to_k
-            ]
+            ]  # 提取k个目标
             k_diff_solutions = [
                 [
                     solution
                     for s_index, solution in enumerate(solution_ls)
-                    if s_index + 1 in k_diff_solutions_index  # 因为s_index从0开始，而k_diff_solutions_index从1开始
-                ]
+                    if (k_diff_solutions_index is not None) and (s_index + 1 in k_diff_solutions_index)  # 因为s_index从0开始，而k_diff_solutions_index从1开始
+                ]  # 如果 k_diff_solutions_index 是 None，就一个都选不出，变成[]
                 for solution_ls, k_diff_solutions_index in zip(n_solutions, k_diff_solutions_indices)
             ]
 
