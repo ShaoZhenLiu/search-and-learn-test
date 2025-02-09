@@ -1,0 +1,12 @@
+# refer to src/sal/config.py for more options
+
+filter_duplicates: true
+approach: diff_of_n
+n: 5  # 检查是否会眼花缭乱
+search_batch_size: 5  # 处理数据的时候的batch size
+dataset_start: 0
+dataset_end: 2000
+seed: 42
+
+dataset_name: ./tests/cn_k12
+output_dir: ./diff_of_n_data
