@@ -15,13 +15,13 @@
 
 from setuptools import find_packages, setup
 
-with open("README.md", "r", encoding="utf-8") as fh:
-    long_description = fh.read()
+# with open("README.md", "r", encoding="utf-8") as fh:
+#     long_description = fh.read()
 
 extras = {}
 extras["quality"] = ["ruff", "isort"]
 extras["tests"] = ["pytest"]
-extras["dev"] = ["vllm==0.6.3"] + extras["quality"] + extras["tests"]
+extras["dev"] = ["vllm>=0.6.5"] + extras["quality"] + extras["tests"]
 
 
 install_requires = [
@@ -31,32 +31,33 @@ install_requires = [
     "word2number",  # for MATH answer parsing
     "transformers>=4.47.0", 
     "fastapi",
+    "datasets"
 ]
 
 setup(
-    name="search-and-learn",
+    name="search-and-learn-test",
     version="0.1.0",
-    author="The Hugging Face team (past and future)",
-    author_email="lewis@huggingface.co",
+    author="tony",
+    author_email="tony0226@foxmail.com",
     description="A tool for search-based methods on llms",
     long_description=open("README.md", "r", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
-    url="https://github.com/reliable-agents/search-and-learn",
+    # url="https://github.com/reliable-agents/search-and-learn",
     keywords="nlp deep learning mcts",
-    license="Apache",
+    # license="Apache",
     package_dir={"": "src"},
     packages=find_packages("src"),
-    classifiers=[
-        "Development Status :: 3 - Alpha",
-        "Intended Audience :: Developers",
-        "Intended Audience :: Education",
-        "Intended Audience :: Science/Research",
-        "License :: OSI Approved :: Apache Software License",
-        "Operating System :: OS Independent",
-        "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.10",
-        "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    ],
+    # classifiers=[
+    #     "Development Status :: 3 - Alpha",
+    #     "Intended Audience :: Developers",
+    #     "Intended Audience :: Education",
+    #     "Intended Audience :: Science/Research",
+    #     "License :: OSI Approved :: Apache Software License",
+    #     "Operating System :: OS Independent",
+    #     "Programming Language :: Python :: 3",
+    #     "Programming Language :: Python :: 3.10",
+    #     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    # ],
     python_requires=">=3.10.9",
     install_requires=install_requires,
     extras_require=extras,
