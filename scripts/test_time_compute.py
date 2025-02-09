@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# encoding=utf-8
 # Copyright 2024 The HuggingFace Inc. team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -76,7 +77,7 @@ def main():
 
     if config.approach == "diff_of_n":
         # 如果属性 k_diff_solutions 或 pred_res 分别是 [] 和 None 的话，说明该目标生成失败，需要过滤掉
-        dataset = dataset.filter(lambda x: (x["k_diff_solutions"] != []) and (x["pred_res"] is not None))
+        dataset = dataset.filter(lambda x: (x["k_diff_solutions"] != []) and (x["pred_result"] is not None))
 
     save_dataset(dataset, config)
     logger.info("Done 🔥!")
