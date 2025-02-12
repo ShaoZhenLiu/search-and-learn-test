@@ -12,5 +12,6 @@ from datasets import load_dataset
 #     filtered_dataset.to_parquet("./filtered_dataset.parquet")  # 276554
 
 if __name__ == '__main__':
-    dataset = load_dataset(path="./cn_k12", split="train")
+    # dataset = load_dataset(path="./cn_k12", split="train")
+    dataset = load_dataset(path="../diff_of_n_data", split="train")
     print(dataset)
