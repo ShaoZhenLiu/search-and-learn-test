@@ -3,10 +3,12 @@
 filter_duplicates: true
 approach: diff_of_n
 n: 5  # 检查是否会眼花缭乱
-search_batch_size: 5  # 处理数据的时候的batch size
-dataset_start: 0
-dataset_end: 2000
-seed: 42
+search_batch_size: 10  # 处理数据的时候的batch size
+# dataset_start: 0
+# dataset_end: 2000
+num_samples: 20000
+seed: 0
 
-dataset_name: ./tests/cn_k12
-output_dir: ./diff_of_n_data
+model_path: /apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/models/gemma-2-27b-it
+dataset_name: /apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data/NuminaMath-CoT-cn_k12
+output_dir: /apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data/NuminaMath-CoT-cn_k12-20000
