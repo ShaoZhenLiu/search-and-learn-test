@@ -26,13 +26,14 @@ from sal.rewards.math_reward import sal_reward_fn
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_names", default="NuminaMath-CoT-cn_k12", type=str)
-    parser.add_argument("--data_dir", default="/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data",
+    parser.add_argument("--data_file", default="deepscaler.json", type=str)
+    parser.add_argument("--data_names", default="DeepScaleR-Preview-Dataset", type=str)
+    parser.add_argument("--data_dir", default="/data/shaozhen.liu/python_project/hf_datasets/",
                         type=str)
     parser.add_argument("--model_name_or_path",
-                        default="/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/models/DeepSeek-R1-Distill-Qwen-32B",
+                        default="/data/shaozhen.liu/python_project/hf_models/DeepSeek-R1-Distill-Qwen-1.5B",
                         type=str)
-    parser.add_argument("--output_dir", default="/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data",
+    parser.add_argument("--output_dir", default="/data/shaozhen.liu/python_project/hf_datasets",
                         type=str)
     parser.add_argument("--prompt_type", default="deepseek-math", type=str)
     # parser.add_argument("--split", default="test", type=str)
@@ -71,9 +72,9 @@ def parse_args():
 def prepare_data(data_name, args):
     # examples = load_data(data_name, args.split, args.data_dir)
     # examples = load_data(data_name=data_name, split="completion", data_dir=args.data_dir)
-    dataset = load_dataset(f"{args.data_dir}/{data_name}", data_files='filtered_dataset.parquet', split='train')
+    dataset = load_dataset(f"{args.data_dir}/{data_name}", data_files=args.data_file, split='train')
     print(dataset)
-    examples = dataset.to_list()[args.start: len(examples) if args.end == -1 else args.end]
+    examples = dataset.to_list()[args.start: len(dataset) if args.end == -1 else args.end]
 
     # shuffle
     if args.shuffle:
