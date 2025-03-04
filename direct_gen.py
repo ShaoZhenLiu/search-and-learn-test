@@ -2,15 +2,18 @@ import random
 import os
 import argparse
 import time
+import json
 
 import numpy as np
-from vllm import LLM, SamplingParams
 from datetime import datetime
 from tqdm import tqdm
-
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from datasets import load_dataset, Dataset
+from vllm import LLM, SamplingParams
+
+from sal.rewards.math_reward import sal_reward_fn
+
 
 # from evaluate import evaluate
 # from utils import set_seed, load_jsonl, save_jsonl, construct_prompt
@@ -24,9 +27,13 @@ from datasets import load_dataset, Dataset
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_names", default="NuminaMath-CoT-cn_k12", type=str)
-    parser.add_argument("--data_dir", default="/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data", type=str)
-    parser.add_argument("--model_name_or_path", default="/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/models/DeepSeek-R1-Distill-Qwen-32B", type=str)
-    parser.add_argument("--output_dir", default="/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data", type=str)
+    parser.add_argument("--data_dir", default="/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data",
+                        type=str)
+    parser.add_argument("--model_name_or_path",
+                        default="/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/models/DeepSeek-R1-Distill-Qwen-32B",
+                        type=str)
+    parser.add_argument("--output_dir", default="/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data",
+                        type=str)
     parser.add_argument("--prompt_type", default="deepseek-math", type=str)
     # parser.add_argument("--split", default="test", type=str)
     # parser.add_argument("--num_test_sample", default=-1, type=int)  # -1 for full data
@@ -60,17 +67,18 @@ def parse_args():
     )  # top_p must be 1 when using greedy sampling (vllm)
     return args
 
+
 def prepare_data(data_name, args):
     # examples = load_data(data_name, args.split, args.data_dir)
     # examples = load_data(data_name=data_name, split="completion", data_dir=args.data_dir)
     dataset = load_dataset(f"{args.data_dir}/{data_name}", data_files='filtered_dataset.parquet', split='train')
     print(dataset)
-    examples = dataset.to_list()[args.start : len(examples) if args.end == -1 else args.end]
-    
+    examples = dataset.to_list()[args.start: len(examples) if args.end == -1 else args.end]
+
     # shuffle
     if args.shuffle:
         random.shuffle(examples)
-        
+
     # add 'idx' in the first column
     if "idx" not in examples[0]:
         examples = [{"idx": i, **example} for i, example in enumerate(examples)]
@@ -83,7 +91,7 @@ def prepare_data(data_name, args):
         raise FileNotFoundError("输出目录不存在")
         # output_dir = f"outputs/{output_dir}"
     out_file = f"{output_dir}/{data_name}/distilled_s{args.start}_e{args.end}.jsonl"
-    
+
     return examples, out_file
 
 
@@ -134,7 +142,7 @@ def construct_prompt(example, data_name, args):
 def save_jsonl(all_samples, out_file):
     dataset = Dataset.from_list(all_samples)
     dataset.to_json(out_file)
-    
+
 
 def main(llm, tokenizer, data_name, args):
     examples, out_file = prepare_data(data_name, args)
@@ -146,7 +154,7 @@ def main(llm, tokenizer, data_name, args):
     samples = []
     for example in tqdm(examples, total=len(examples)):
         idx = example["idx"]
-        
+
         full_prompt = construct_prompt(example, data_name, args)
 
         if idx == args.start:  # 方便我们查看构造好的prompt
@@ -157,7 +165,7 @@ def main(llm, tokenizer, data_name, args):
             "idx": idx,
             "question": example["problem"],
             "gt_cot": example["solution"],
-            # "gt": gt_ans,  # 没这东西，需要自己找出来
+            "gt": example["answer"],
             "prompt": full_prompt,
         }
 
@@ -166,7 +174,7 @@ def main(llm, tokenizer, data_name, args):
             if key in example:
                 sample[key] = example[key]
         samples.append(sample)
-    
+
     # repeat n times
     input_prompts = [
         sample["prompt"] for sample in samples for _ in range(args.n_sampling)
@@ -229,24 +237,47 @@ def main(llm, tokenizer, data_name, args):
     # results = real_outputs
     # time_use = time.time() - start_time
 
-    # put results back to examples
+    # put the correct generated results back to examples
+    incorrect_count = 0
     all_samples = []
     for i, sample in enumerate(samples):
-        real_output = outputs_ls[i * args.n_sampling : (i + 1) * args.n_sampling]
-        output_token_ids = output_token_ids_ls[i * args.n_sampling : (i + 1) * args.n_sampling]
+        real_output = outputs_ls[i * args.n_sampling: (i + 1) * args.n_sampling]
+        output_token_ids = output_token_ids_ls[i * args.n_sampling: (i + 1) * args.n_sampling]
+
+        # result checking: if any real_output is incorrect, then the sample will be dropped
+        correct_ls = [sal_reward_fn(solution_str=res, ground_truth=sample['gt']) for res in real_output]
+        is_correct = True
+        if i == 0:
+            print(correct_ls)
+        if False in correct_ls:
+            is_correct = False
+            incorrect_count += 1
+
         sample.pop("prompt")
         sample.update({
             "pred_cot": real_output[0] if len(real_output) == 1 else real_output,
             "pred_cot_token_len": output_token_ids[0] if len(output_token_ids) == 1 else output_token_ids,
+            "correct": is_correct
         })
         all_samples.append(sample)
+
+    print(f"模型生成回答的平均token长度为: {sum(output_token_ids_ls) / len(outputs_ls)}")
+    print(f"模型生成答案的准确率为: {incorrect_count / len(examples) * 100} %")
+    result_json = {
+        "average_token_len": sum(output_token_ids_ls) / len(outputs_ls),
+        "llm_response_acc": incorrect_count / len(examples) * 100
+    }
+
+    if args.correct_ans_filter:
+        all_samples = [sample for sample in all_samples if sample["correct"]]
 
     # save outputs
     if args.save_outputs:
         save_jsonl(all_samples, out_file)
-        
-    print(f"模型生成回答的平均token长度为: {sum(output_token_ids_ls) / len(outputs_ls)}")
+        with open(out_file.replace(".jsonl", f"_metrics.json"), "w") as f:
+            json.dump(result_json, f, indent=4)
 
+    return result_json
 
 
 def set_seed(seed: int = 42) -> None:
@@ -254,7 +285,7 @@ def set_seed(seed: int = 42) -> None:
     random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
     print(f"Random seed set as {seed}")
-    
+
 
 if __name__ == "__main__":
     args = parse_args()
