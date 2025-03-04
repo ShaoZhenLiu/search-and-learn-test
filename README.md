@@ -66,8 +66,4 @@ sh ./scripts/run.sh
 
 # Finetune
 
-微调代码在 `scripts/finetune.py` 中，还没有整合到 config 和 sal 库中，之后稳定了再整合。
-
-```bash
-sh ./scripts/finetune.sh
-```
+微调使用llama-factory，具体请参考该仓库的使用
