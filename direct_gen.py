@@ -240,7 +240,7 @@ def main(llm, tokenizer, data_name, args):
     # time_use = time.time() - start_time
 
     # put the correct generated results back to examples
-    incorrect_count = 0
+    correct_count = 0
     all_samples = []
     for i, sample in enumerate(samples):
         real_output = outputs_ls[i * args.n_sampling: (i + 1) * args.n_sampling]
@@ -248,17 +248,8 @@ def main(llm, tokenizer, data_name, args):
 
         # result checking: if any real_output is incorrect, then the sample will be dropped
         correct_ls = [sal_reward_fn(solution_str=res, ground_truth=sample['gt']) for res in real_output]
-        is_correct = True
-        # if i == 0:
-            # print(real_output[0])
-            # print(sample['gt'])
-            # print(correct_ls)
-        if False in correct_ls:
-            print("="*20)
-            print(real_output[0].split("</think>")[-1])
-            print(sample['gt'])
-            is_correct = False
-            incorrect_count += 1
+        is_correct = False if False in correct_ls else True
+        correct_count += is_correct
 
         sample.pop("prompt")
         sample.update({
@@ -269,10 +260,10 @@ def main(llm, tokenizer, data_name, args):
         all_samples.append(sample)
 
     print(f"模型生成回答的平均token长度为: {sum(output_token_ids_ls) / len(outputs_ls)}")
-    print(f"模型生成答案的准确率为: {(len(examples) - incorrect_count) / len(examples) * 100} %")
+    print(f"模型生成答案的准确率为: {correct_count / len(examples) * 100} %")
     result_json = {
         "average_token_len": sum(output_token_ids_ls) / len(outputs_ls),
-        "llm_response_acc": (len(examples) - incorrect_count) / len(examples) * 100,
+        "llm_response_acc": correct_count / len(examples) * 100,
     }
 
     if args.correct_answer_only:
