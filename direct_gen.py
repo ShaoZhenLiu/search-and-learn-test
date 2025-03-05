@@ -49,6 +49,7 @@ def parse_args():
     # parser.add_argument("--use_vllm", default=True)
     parser.add_argument("--save_outputs", default=True)
     parser.add_argument("--overwrite", default=True)
+    parser.add_argument("--correct_answer_only", default=True)
     # parser.add_argument("--use_safetensors", action="store_true")
     # parser.add_argument("--num_shots", type=int, default=0)
     parser.add_argument(
@@ -105,7 +106,7 @@ def setup(args):
         tensor_parallel_size=len(available_gpus) // args.pipeline_parallel_size,
         pipeline_parallel_size=args.pipeline_parallel_size,
         trust_remote_code=True,
-        gpu_memory_utilization=0.8,
+        # gpu_memory_utilization=0.8,
         # enforce_eager=True,
     )
     tokenizer = None
@@ -248,9 +249,14 @@ def main(llm, tokenizer, data_name, args):
         # result checking: if any real_output is incorrect, then the sample will be dropped
         correct_ls = [sal_reward_fn(solution_str=res, ground_truth=sample['gt']) for res in real_output]
         is_correct = True
-        if i == 0:
-            print(correct_ls)
+        # if i == 0:
+            # print(real_output[0])
+            # print(sample['gt'])
+            # print(correct_ls)
         if False in correct_ls:
+            print("="*20)
+            print(real_output[0].split("</think>")[-1])
+            print(sample['gt'])
             is_correct = False
             incorrect_count += 1
 
@@ -263,13 +269,14 @@ def main(llm, tokenizer, data_name, args):
         all_samples.append(sample)
 
     print(f"模型生成回答的平均token长度为: {sum(output_token_ids_ls) / len(outputs_ls)}")
-    print(f"模型生成答案的准确率为: {incorrect_count / len(examples) * 100} %")
+    print(f"模型生成答案的准确率为: {(len(examples) - incorrect_count) / len(examples) * 100} %")
     result_json = {
         "average_token_len": sum(output_token_ids_ls) / len(outputs_ls),
-        "llm_response_acc": incorrect_count / len(examples) * 100
+        "llm_response_acc": (len(examples) - incorrect_count) / len(examples) * 100,
     }
 
-    if args.correct_ans_filter:
+    if args.correct_answer_only:
+        print
         all_samples = [sample for sample in all_samples if sample["correct"]]
 
     # save outputs

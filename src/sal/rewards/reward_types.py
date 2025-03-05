@@ -10,6 +10,9 @@ from enum import Enum
 class RewardConfig:
     # Use LLM as ORM to evaluate correctness.
     use_math_orm: bool = False
+
+    # Whether to check the <think> format.
+    check_think_format: bool = True
     
     # General reward constants.
     correct_reward: float = 1.0
