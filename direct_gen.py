@@ -31,7 +31,7 @@ def parse_args():
     parser.add_argument("--data_dir", default="/data/shaozhen.liu/python_project/hf_datasets/",
                         type=str)
     parser.add_argument("--model_name_or_path",
-                        default="/data/shaozhen.liu/python_project/hf_models/DeepSeek-R1-Distill-Qwen-1.5B",
+                        default="/data/shaozhen.liu/python_project/hf_models/DeepSeek-R1-Distill-Qwen-32B",
                         type=str)
     parser.add_argument("--output_dir", default="/data/shaozhen.liu/python_project/hf_datasets",
                         type=str)
@@ -107,7 +107,7 @@ def setup(args):
         pipeline_parallel_size=args.pipeline_parallel_size,
         trust_remote_code=True,
         # gpu_memory_utilization=0.8,
-        # enforce_eager=True,
+        enforce_eager=True,
     )
     tokenizer = None
     if args.apply_chat_template:
@@ -267,11 +267,12 @@ def main(llm, tokenizer, data_name, args):
     }
 
     if args.correct_answer_only:
-        print
+        print("Dropping samples with incorrect answer...")
         all_samples = [sample for sample in all_samples if sample["correct"]]
 
     # save outputs
     if args.save_outputs:
+        print(f"Saving data to: {out_file}")
         save_jsonl(all_samples, out_file)
         with open(out_file.replace(".jsonl", f"_metrics.json"), "w") as f:
             json.dump(result_json, f, indent=4)
