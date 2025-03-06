@@ -1,6 +1,6 @@
 """System prompts"""
 
-DEEPSEEK_MATH_SYSTEM_PROMPT = """Let's think step by step and output the final answer within \\boxed{}. """
+DEEPSEEK_MATH_SYSTEM_PROMPT = """Let's think step by step and output the final answer within \\boxed{}."""
 
 # For Math ORM to verify correctness of LLM's solution. We disable this by default, as it doesn't help much.
 ORM_PROMPT = """You are an expert in verifying if two math answers are the same.
@@ -379,3 +379,11 @@ DIFF_OF_N_STEP_PROMPTS = {  # todo 让模型先分析，然后再给出答案，
 }
 
 # ============Short CoT Multi Turn Generation Prompts================ #
+
+DIFF_OF_N_MULTI_TURN_STEP_PROMPTS = {
+    "turn1" : "{{ problem }}\n" + DEEPSEEK_MATH_SYSTEM_PROMPT,  # 让模型解决数学问题
+    "turn2" : "Can you solve it in another way?",  # 这里问n次
+    "turn3" : "Please select k (1 < k < {{ n_solutions | length }}) solutions that are both representative and significantly different from each other. Explain briefly why you chose each solution.",  # 选出k个
+    "turn4" : "Please compare the final results or outcomes of these k solutions you selected before to determine if they are consistent with each other. Provide your reasoning in detail.",  # 对那k个进行评价
+    "turn5" : "According to all the analysis above, please give your final answer of this math problem.",  # 给出最后的答案
+}
