@@ -9,4 +9,5 @@ seed: 42
 
 model_path: /data/shaozhen.liu/python_project/hf_models/DeepSeek-R1-Distill-Qwen-32B
 dataset_name: /data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-Preview-Dataset
+dataset_files: deepscaler.json
 output_dir: /data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-Preview-Dataset
