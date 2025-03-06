@@ -381,9 +381,22 @@ DIFF_OF_N_STEP_PROMPTS = {  # todo 让模型先分析，然后再给出答案，
 # ============Short CoT Multi Turn Generation Prompts================ #
 
 DIFF_OF_N_MULTI_TURN_STEP_PROMPTS = {
-    "turn1" : "{{ problem }}\n" + DEEPSEEK_MATH_SYSTEM_PROMPT,  # 让模型解决数学问题
-    "turn2" : "Can you solve it in another way?",  # 这里问n次
-    "turn3" : "Please select k (1 < k < {{ n_solutions | length }}) solutions that are both representative and significantly different from each other. Explain briefly why you chose each solution.",  # 选出k个
-    "turn4" : "Please compare the final results or outcomes of these k solutions you selected before to determine if they are consistent with each other. Provide your reasoning in detail.",  # 对那k个进行评价
-    "turn5" : "According to all the analysis above, please give your final answer of this math problem.",  # 给出最后的答案
+    "turn0" : "{{ problem }}\n" + DEEPSEEK_MATH_SYSTEM_PROMPT,  # 让模型解决数学问题
+    "turn1" : "Can we have a new problem-solving approach that is different from the previous solution(s)?"
+              "\n" + DEEPSEEK_MATH_SYSTEM_PROMPT,  # 这里问n次
+    "turn2" : "Please select k (1 < k < {{ n_solutions | length }}) solutions that are both representative and significantly different from each other. Explain briefly why you chose each solution.",  # 选出k个
+    "turn3" : "Please compare the final results or outcomes of these k solutions you selected before to determine if they are consistent with each other. Provide your reasoning in detail.",  # 对那k个进行评价
+    "turn4" : "According to all the analysis above, please give your final answer of this math problem."
+              "\n" + DEEPSEEK_MATH_SYSTEM_PROMPT,  # 给出最后的答案
+}
+
+ITER_GEN_MULTI_TURN_STEP_PROMPTS = {
+    "turn0" : "{{ problem }}\n" + DEEPSEEK_MATH_SYSTEM_PROMPT,
+    "turn1" : "Please propose a new problem-solving approach that is significantly different from the previous solution."
+              "\n" + DEEPSEEK_MATH_SYSTEM_PROMPT,
+    "turn2" : "Compare the results of two problem-solving approaches."
+              "\nAnalyze whether the results of these two methods are consistent and provide your reasoning.",
+    "turn3" : "Determine which result is more reliable."
+              "\nRefer to the above information to provide a step-by-step analysis and your conclusion."
+              "\n" + DEEPSEEK_MATH_SYSTEM_PROMPT,
 }
