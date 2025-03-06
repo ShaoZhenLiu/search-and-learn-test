@@ -26,6 +26,7 @@ from sal.utils.prompts import (
     LLAMA_MATH_SYSTEM_PROMPT_MODIFY,
     ITER_GEN_STEP_PROMPTS,
     DIFF_OF_N_STEP_PROMPTS,
+    ITER_GEN_MULTI_TURN_STEP_PROMPTS,
     DIFF_OF_N_MULTI_TURN_STEP_PROMPTS,
 )
 
@@ -35,6 +36,7 @@ SYSTEM_PROMPT_TYPE = {
     "dvts": LLAMA_MATH_SYSTEM_PROMPT,
     "iter_gen": LLAMA_MATH_SYSTEM_PROMPT_MODIFY,
     "diff_of_n": LLAMA_MATH_SYSTEM_PROMPT_MODIFY,
+    "iter_gen_multi_turn": LLAMA_MATH_SYSTEM_PROMPT,
     "diff_of_n_multi_turn": LLAMA_MATH_SYSTEM_PROMPT,
 }
 
@@ -44,6 +46,7 @@ STEP_PROMPT_TYPE = {
     "dvts": None,
     "iter_gen": ITER_GEN_STEP_PROMPTS,
     "diff_of_n": DIFF_OF_N_STEP_PROMPTS,
+    "iter_gen_multi_turn": ITER_GEN_MULTI_TURN_STEP_PROMPTS,
     "diff_of_n_multi_turn": DIFF_OF_N_MULTI_TURN_STEP_PROMPTS,
 }
 
@@ -73,6 +76,8 @@ class Config:
     dataset_start: int = None
     dataset_end: int = None
     num_samples: int = None
+    calculate_correct: bool = True
+    filter_correct: bool = True
 
     # Chat template related options
     system_prompt: str = SYSTEM_PROMPT_TYPE[approach]
