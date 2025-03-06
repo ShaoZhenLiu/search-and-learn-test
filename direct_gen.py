@@ -1,18 +1,15 @@
 import random
 import os
 import argparse
-import time
 import json
 
 import numpy as np
-from datetime import datetime
 from tqdm import tqdm
-import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer
 from datasets import load_dataset, Dataset
 from vllm import LLM, SamplingParams
 
-from sal.rewards.math_reward import sal_reward_fn
+from sal.utils.rewards import sal_reward_fn
 
 
 # from evaluate import evaluate
