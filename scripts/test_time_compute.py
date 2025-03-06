@@ -22,10 +22,11 @@ from vllm import LLM
 from sal.config import Config
 from sal.models.reward_models import load_prm
 from sal.search import beam_search, best_of_n, dvts
-from sal.inference import iterative_generate, diff_of_n
+from sal.inference import iterative_generate, diff_of_n, diff_of_n_multi_turn, iterative_generate_multi_trun
 from sal.utils.data import get_dataset, save_dataset
 from sal.utils.parser import H4ArgumentParser
 from sal.utils.score import score
+from sal.utils.rewards import sal_reward_fn
 
 logging.basicConfig(level=logging.INFO)
 
@@ -39,6 +40,8 @@ APPROACHES = {
     "best_of_n": best_of_n,
     "iter_gen": iterative_generate,
     "diff_of_n": diff_of_n,
+    "iter_gen_multi_turn": iterative_generate_multi_trun,
+    "diff_of_n_multi_turn": diff_of_n_multi_turn,
 }
 
 
@@ -74,12 +77,16 @@ def main():
 
     # # 然后根据 dataset 中的解和打分，生成最好的答案
     # dataset = score(dataset, config)
+    acc = None
+    if config.calculate_correct:
+        dataset, acc = sal_reward_fn(dataset, config)  # 判断输出正误，同时，过滤掉错误的数据
+        logger.info(f"模型生成答案的准确性为: {acc}%")
 
     if config.approach == "diff_of_n":
         # 如果属性 k_diff_solutions 或 pred_res 分别是 [] 和 None 的话，说明该目标生成失败，需要过滤掉
         dataset = dataset.filter(lambda x: (x["k_diff_solutions"] != []) and (x["pred_result"] is not None))
 
-    save_dataset(dataset, config)
+    save_dataset(dataset, config, acc)
     logger.info("Done 🔥!")
 
 
