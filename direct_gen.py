@@ -32,6 +32,7 @@ def parse_args():
                         type=str)
     parser.add_argument("--output_dir", default="/data/shaozhen.liu/python_project/hf_datasets",
                         type=str)
+    parser.add_argument("--checkpoint_file", default=".checkpoint", type=str)
     parser.add_argument("--prompt_type", default="deepseek-math", type=str)
     # parser.add_argument("--split", default="test", type=str)
     # parser.add_argument("--num_test_sample", default=-1, type=int)  # -1 for full data
@@ -42,9 +43,9 @@ def parse_args():
     parser.add_argument("--n_sampling", default=1, type=int)
     parser.add_argument("--top_p", default=1, type=float)
     parser.add_argument("--max_tokens_per_call", default=16384, type=int)
+    parser.add_argument("--batch_size", default=10, type=int)
     parser.add_argument("--shuffle", default=True)
     # parser.add_argument("--use_vllm", default=True)
-    parser.add_argument("--save_outputs", default=True)
     parser.add_argument("--overwrite", default=True)
     parser.add_argument("--correct_answer_only", default=True)
     # parser.add_argument("--use_safetensors", action="store_true")
@@ -90,8 +91,9 @@ def prepare_data(data_name, args):
         raise FileNotFoundError("输出目录不存在")
         # output_dir = f"outputs/{output_dir}"
     out_file = f"{output_dir}/{data_name}/distilled_s{args.start}_e{args.end}.jsonl"
+    final_out_file = f"{output_dir}/{data_name}/distilled_s{args.start}_e{args.end}_final.jsonl"
 
-    return examples, out_file
+    return examples, out_file, final_out_file
 
 
 def setup(args):
@@ -140,20 +142,9 @@ def construct_prompt(example, data_name, args):
     return context
 
 
-def save_jsonl(all_samples, out_file):
-    dataset = Dataset.from_list(all_samples)
-    dataset.to_json(out_file)
-
-
-def main(llm, tokenizer, data_name, args):
-    examples, out_file = prepare_data(data_name, args)
-    print("=" * 50)
-    print("data:", data_name, " ,remain samples:", len(examples))
-    if len(examples) > 0:
-        print(examples[0])
-
-    samples = []
-    for example in tqdm(examples, total=len(examples)):
+def get_samples(examples_ls, data_name):
+    samples_ls = []
+    for example in tqdm(examples_ls, total=len(examples_ls)):
         idx = example["idx"]
 
         full_prompt = construct_prompt(example, data_name, args)
@@ -174,13 +165,16 @@ def main(llm, tokenizer, data_name, args):
         for key in ["source"]:
             if key in example:
                 sample[key] = example[key]
-        samples.append(sample)
+        samples_ls.append(sample)
+    return samples_ls
 
+
+def get_inputs_prompts(tokenizer, samples_ls, args_dict):
     # repeat n times
     input_prompts = [
-        sample["prompt"] for sample in samples for _ in range(args.n_sampling)
+        sample["prompt"] for sample in samples_ls for _ in range(args_dict.n_sampling)
     ]
-    if args.apply_chat_template:
+    if args_dict.apply_chat_template:
         input_prompts = [
             tokenizer.apply_chat_template(
                 [{"role": "user", "content": prompt.strip()}],
@@ -189,66 +183,45 @@ def main(llm, tokenizer, data_name, args):
             )
             for prompt in input_prompts
         ]
-    input_prompts = [(i, prompt) for i, prompt in enumerate(input_prompts)]
+    return [(i, prompt) for i, prompt in enumerate(input_prompts)]
 
-    stop_words = ["</s>", "<|im_end|>", "<|endoftext|>"]
 
-    # start inference
-    # measure time use
-    # start_time = time.time()
-    print("-" * 20)
-
-    # get all outputs
-    prompts = [item[1] for item in input_prompts]
+def process_batch(prompts_batch, llm, stop_words_ls, args_dict):
+    """处理单个批次并返回有序结果"""
+    prompts_batch = [item[1] for item in prompts_batch]
     outputs = llm.generate(
-        prompts,
+        prompts_batch,
         SamplingParams(
-            temperature=args.temperature,
-            top_p=args.top_p,
-            max_tokens=args.max_tokens_per_call,
+            temperature=args_dict.temperature,
+            top_p=args_dict.top_p,
+            max_tokens=args_dict.max_tokens_per_call,
             n=1,
-            stop=stop_words,
+            stop=stop_words_ls,
             stop_token_ids=(
                 [151645, 151643]
-                if "qwen" in args.model_name_or_path.lower()
+                if "qwen" in args_dict.model_name_or_path.lower()
                 else None
             ),
         ),
     )
-
     outputs = sorted(outputs, key=lambda x: int(x.request_id))  # sort outputs by request_id
     outputs_ls = [output.outputs[0].text for output in outputs]
-    # print(f"模型的实际输出: \n{outputs_ls[0]}")
     output_token_ids_ls = [len(output.outputs[0].token_ids) for output in outputs]
+    assert len(outputs_ls) == len(output_token_ids_ls) == len(prompts_batch)
+    return outputs_ls, output_token_ids_ls
 
-    assert len(outputs_ls) == len(input_prompts) == len(output_token_ids_ls)
 
-    # remove input_prompt from end_prompt
-    # 我看了一下output[0].text，应该是不用这样的，本来就没有input_prompt，所以token_ids里面就完全都是回答了
-    # real_outputs = []
-    # for i in range(len(input_prompts)):
-    #     end_prompt = outputs_ls[i][1]
-    #     real_output = '<think>\n' + end_prompt.split(input_prompts[i][1])[-1].strip()  # 去掉input_prompts部分
-    #     for stop_word in stop_words:
-    #         if stop_word in real_output:
-    #             real_output = real_output.split(stop_word)[0].strip()  # 去掉stop_word部分
-    #     real_outputs.append(real_output)
-
-    # extract preds
-    # results = real_outputs
-    # time_use = time.time() - start_time
-
-    # put the correct generated results back to examples
-    correct_count = 0
+def outputs_to_samples(origin_samples_ls, outputs_ls, output_token_ids_ls, args_dict):
+    # correct_count = 0
     all_samples = []
-    for i, sample in enumerate(samples):
-        real_output = outputs_ls[i * args.n_sampling: (i + 1) * args.n_sampling]
-        output_token_ids = output_token_ids_ls[i * args.n_sampling: (i + 1) * args.n_sampling]
+    for i, sample in enumerate(origin_samples_ls):
+        real_output = outputs_ls[i * args_dict.n_sampling: (i + 1) * args_dict.n_sampling]
+        output_token_ids = output_token_ids_ls[i * args_dict.n_sampling: (i + 1) * args_dict.n_sampling]
 
         # result checking: if any real_output is incorrect, then the sample will be dropped
         correct_ls = [sal_reward_fn(solution_str=res, ground_truth=sample['gt']) for res in real_output]
         is_correct = False if False in correct_ls else True
-        correct_count += is_correct
+        # correct_count += is_correct
 
         sample.pop("prompt")
         sample.update({
@@ -257,24 +230,113 @@ def main(llm, tokenizer, data_name, args):
             "correct": is_correct
         })
         all_samples.append(sample)
+    # acc = correct_count / len(origin_samples_ls) * 100
+    return all_samples
 
-    print(f"模型生成回答的平均token长度为: {sum(output_token_ids_ls) / len(outputs_ls)}")
-    print(f"模型生成答案的准确率为: {correct_count / len(examples) * 100} %")
-    result_json = {
-        "average_token_len": sum(output_token_ids_ls) / len(outputs_ls),
-        "llm_response_acc": correct_count / len(examples) * 100,
-    }
 
-    if args.correct_answer_only:
-        print("Dropping samples with incorrect answer...")
-        all_samples = [sample for sample in all_samples if sample["correct"]]
+def save_checkpoint(resume_idx, args_dict):
+    """保存检查点"""
+    with open(args_dict.checkpoint_file, 'w') as f:
+        json.dump({"resume_idx": resume_idx}, f)
 
-    # save outputs
-    if args.save_outputs:
-        print(f"Saving data to: {out_file}")
-        save_jsonl(all_samples, out_file)
-        with open(out_file.replace(".jsonl", f"_metrics.json"), "w") as f:
-            json.dump(result_json, f, indent=4)
+
+def load_checkpoint(args_dict):
+    """加载检查点"""
+    if os.path.exists(args_dict.checkpoint_file):
+        with open(args_dict.checkpoint_file, 'r') as f:
+            return json.load(f)["resume_idx"]
+    return 0
+
+
+def main(llm, tokenizer, data_name, args):
+    examples, out_file, final_out_file = prepare_data(data_name, args)
+    print("=" * 50)
+    print("data:", data_name, " ,samples:", len(examples))
+    if len(examples) > 0:
+        print(examples[0])
+
+    samples = get_samples(examples, data_name)
+
+    input_prompts = get_inputs_prompts(tokenizer, samples, args)
+
+    stop_words = ["</s>", "<|im_end|>", "<|endoftext|>"]
+
+    # start inference
+    print("-" * 20)
+
+    # 恢复处理进度
+    resume_idx = load_checkpoint(args)
+    processed = resume_idx
+
+    # 初始化进度条（自动从断点位置开始）
+    pbar = tqdm(
+        initial=resume_idx,
+        total=len(input_prompts),
+        desc="Generating responses",
+        unit="prompt",
+        dynamic_ncols=True
+    )
+
+    try:
+        # get all outputs
+        while processed < len(input_prompts):
+            batch = input_prompts[processed:processed + args.batch_size]
+            outputs_ls, output_token_ids_ls = process_batch(batch, llm, stop_words, args)
+
+            # put the correct generated results back to examples
+            processed_batched_samples = outputs_to_samples(samples, outputs_ls, output_token_ids_ls, args)
+            with open(out_file, 'a') as f:
+                for result in processed_batched_samples:
+                    json_line = json.dumps(result)
+                    f.write(json_line + '\n')
+
+            processed += len(batch)
+            save_checkpoint(processed, args)
+
+            # 更新进度条（包含动态信息）
+            pbar.set_postfix({
+                'batch': f"{processed}/{len(input_prompts)}",
+                'speed': f"{len(batch) / pbar.format_dict['rate']:.1f} prompts/s" if pbar.format_dict['rate'] else "N/A"
+            })
+            pbar.update(len(batch))  # 关键更新语句
+
+        # 完成后标记为绿色
+        pbar.close()
+        print("\n\033[32mAll generations completed!\033[0m")
+    finally:
+        if args.correct_answer_only:
+            print("Dropping samples with incorrect answer...")
+            processed_batched_samples = [sample for sample in processed_batched_samples if sample["correct"]]
+
+        if processed >= len(input_prompts):
+            correct_count = 0
+            token_len_ls = []
+
+            # 生成最终输出文件
+            print(f"Saving data to: {final_out_file}")
+            with open(out_file, 'r') as fin, open(final_out_file, 'w') as fout:
+                for line in fin:
+                    data = json.loads(line)
+                    correct_count += data["correct"]
+                    token_len_ls.append(data["pred_cot_token_len"])
+                    if args.correct_answer_only and data["correct"]:  # 只保存对的输出
+                        fout.write(data + '\n')
+
+            # todo acc最后数据全生成了再统计，平均token数也是最后统计
+            avg_token_len = sum(token_len_ls) / len(input_prompts)
+            acc = correct_count / len(input_prompts) * 100
+            print(f"模型生成回答的平均token长度为: {avg_token_len}")
+            print(f"模型生成答案的准确率为: {acc} %")
+            result_json = {
+                "average_token_len": avg_token_len,
+                "llm_response_acc": acc,
+            }
+            with open(out_file.replace(".jsonl", f"_metrics.json"), "w") as f:
+                json.dump(result_json, f, indent=4)
+
+            # 清理检查点
+            if os.path.exists(args.checkpoint_file):
+                os.remove(args.checkpoint_file)
 
     return result_json
 
