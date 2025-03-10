@@ -2,6 +2,8 @@ import random
 import os
 import argparse
 import json
+import time
+from datetime import datetime
 
 import numpy as np
 from tqdm import tqdm
@@ -9,7 +11,7 @@ from transformers import AutoTokenizer
 from datasets import load_dataset, Dataset
 from vllm import LLM, SamplingParams
 
-from sal.utils.rewards import sal_reward_fn
+from sal.utils.rewards import simple_reward_fn
 
 
 # from evaluate import evaluate
@@ -28,7 +30,7 @@ def parse_args():
     parser.add_argument("--data_dir", default="/data/shaozhen.liu/python_project/hf_datasets/",
                         type=str)
     parser.add_argument("--model_name_or_path",
-                        default="/data/shaozhen.liu/python_project/hf_models/DeepSeek-R1-Distill-Qwen-32B",
+                        default="/data/shaozhen.liu/python_project/hf_models/QwQ-32B",
                         type=str)
     parser.add_argument("--output_dir", default="/data/shaozhen.liu/python_project/hf_datasets",
                         type=str)
@@ -48,6 +50,7 @@ def parse_args():
     # parser.add_argument("--use_vllm", default=True)
     parser.add_argument("--overwrite", default=True)
     parser.add_argument("--correct_answer_only", default=True)
+    parser.add_argument("--resume", default=False)
     # parser.add_argument("--use_safetensors", action="store_true")
     # parser.add_argument("--num_shots", type=int, default=0)
     parser.add_argument(
@@ -88,12 +91,11 @@ def prepare_data(data_name, args):
     # out_file_prefix = f"{args.split}_{args.prompt_type}_{args.num_test_sample}_seed{args.seed}_t{args.temperature}"
     output_dir = args.output_dir
     if not os.path.exists(output_dir):
-        raise FileNotFoundError("输出目录不存在")
-        # output_dir = f"outputs/{output_dir}"
-    out_file = f"{output_dir}/{data_name}/distilled_s{args.start}_e{args.end}.jsonl"
-    final_out_file = f"{output_dir}/{data_name}/distilled_s{args.start}_e{args.end}_final.jsonl"
+        output_dir = f"outputs/{output_dir}"
+    date_time = time.strftime("%Y%m%d%H%M%S", time.localtime())
+    out_file = f"{output_dir}/{data_name}/distilled_s{args.start}_e{args.end}_{date_time}.jsonl"
 
-    return examples, out_file, final_out_file
+    return examples, out_file
 
 
 def setup(args):
@@ -124,7 +126,7 @@ def setup(args):
 
 
 def construct_prompt(example, data_name, args):
-    if args.prompt_type == "NuminaMath-CoT-cn_k12":
+    if args.prompt_type == "qwen25-math":
         input_template = (
             "<|im_start|>system\nPlease reason step by step, and put your final answer within \\boxed{{}}.<|im_end|>\n"
             "<|im_start|>user\n{input}<|im_end|>\n"
@@ -183,12 +185,12 @@ def get_inputs_prompts(tokenizer, samples_ls, args_dict):
             )
             for prompt in input_prompts
         ]
-    return [(i, prompt) for i, prompt in enumerate(input_prompts)]
+    return input_prompts
 
 
 def process_batch(prompts_batch, llm, stop_words_ls, args_dict):
     """处理单个批次并返回有序结果"""
-    prompts_batch = [item[1] for item in prompts_batch]
+    # prompts_batch = [item[1] for item in prompts_batch]
     outputs = llm.generate(
         prompts_batch,
         SamplingParams(
@@ -219,7 +221,7 @@ def outputs_to_samples(origin_samples_ls, outputs_ls, output_token_ids_ls, args_
         output_token_ids = output_token_ids_ls[i * args_dict.n_sampling: (i + 1) * args_dict.n_sampling]
 
         # result checking: if any real_output is incorrect, then the sample will be dropped
-        correct_ls = [sal_reward_fn(solution_str=res, ground_truth=sample['gt']) for res in real_output]
+        correct_ls = [simple_reward_fn(solution_str=res, ground_truth=sample['gt']) for res in real_output]
         is_correct = False if False in correct_ls else True
         # correct_count += is_correct
 
@@ -242,14 +244,14 @@ def save_checkpoint(resume_idx, args_dict):
 
 def load_checkpoint(args_dict):
     """加载检查点"""
-    if os.path.exists(args_dict.checkpoint_file):
+    if args_dict.resume and os.path.exists(args_dict.checkpoint_file):
         with open(args_dict.checkpoint_file, 'r') as f:
             return json.load(f)["resume_idx"]
     return 0
 
 
 def main(llm, tokenizer, data_name, args):
-    examples, out_file, final_out_file = prepare_data(data_name, args)
+    examples, out_file = prepare_data(data_name, args)
     print("=" * 50)
     print("data:", data_name, " ,samples:", len(examples))
     if len(examples) > 0:
@@ -266,7 +268,7 @@ def main(llm, tokenizer, data_name, args):
 
     # 恢复处理进度
     resume_idx = load_checkpoint(args)
-    processed = resume_idx
+    processed = resume_idx * args.n_sampling  # 保证n_sampling可以正常执行
 
     # 初始化进度条（自动从断点位置开始）
     pbar = tqdm(
@@ -280,11 +282,13 @@ def main(llm, tokenizer, data_name, args):
     try:
         # get all outputs
         while processed < len(input_prompts):
+            batch_ori_sample = samples[processed:processed + args.batch_size]
             batch = input_prompts[processed:processed + args.batch_size]
             outputs_ls, output_token_ids_ls = process_batch(batch, llm, stop_words, args)
 
             # put the correct generated results back to examples
-            processed_batched_samples = outputs_to_samples(samples, outputs_ls, output_token_ids_ls, args)
+            processed_batched_samples = outputs_to_samples(batch_ori_sample, outputs_ls, output_token_ids_ls, args)
+            print("process iteration done!")
             with open(out_file, 'a') as f:
                 for result in processed_batched_samples:
                     json_line = json.dumps(result)
@@ -296,7 +300,6 @@ def main(llm, tokenizer, data_name, args):
             # 更新进度条（包含动态信息）
             pbar.set_postfix({
                 'batch': f"{processed}/{len(input_prompts)}",
-                'speed': f"{len(batch) / pbar.format_dict['rate']:.1f} prompts/s" if pbar.format_dict['rate'] else "N/A"
             })
             pbar.update(len(batch))  # 关键更新语句
 
@@ -304,25 +307,24 @@ def main(llm, tokenizer, data_name, args):
         pbar.close()
         print("\n\033[32mAll generations completed!\033[0m")
     finally:
-        if args.correct_answer_only:
-            print("Dropping samples with incorrect answer...")
-            processed_batched_samples = [sample for sample in processed_batched_samples if sample["correct"]]
+        # if args.correct_answer_only:
+        #     print("Dropping samples with incorrect answer...")
+        #     processed_batched_samples = [sample for sample in processed_batched_samples if sample["correct"]]
 
         if processed >= len(input_prompts):
             correct_count = 0
             token_len_ls = []
 
             # 生成最终输出文件
-            print(f"Saving data to: {final_out_file}")
-            with open(out_file, 'r') as fin, open(final_out_file, 'w') as fout:
+            print(f"Saving data to: {out_file.replace(".jsonl", f"_final.json")}")
+            with open(out_file, 'r') as fin, open(out_file.replace(".jsonl", f"_final.json"), 'w') as fout:
                 for line in fin:
                     data = json.loads(line)
                     correct_count += data["correct"]
                     token_len_ls.append(data["pred_cot_token_len"])
                     if args.correct_answer_only and data["correct"]:  # 只保存对的输出
-                        fout.write(data + '\n')
+                        fout.write(json.dumps(data) + '\n')
 
-            # todo acc最后数据全生成了再统计，平均token数也是最后统计
             avg_token_len = sum(token_len_ls) / len(input_prompts)
             acc = correct_count / len(input_prompts) * 100
             print(f"模型生成回答的平均token长度为: {avg_token_len}")
