@@ -396,7 +396,6 @@ ITER_GEN_MULTI_TURN_STEP_PROMPTS = {
               "\n" + DEEPSEEK_MATH_SYSTEM_PROMPT,
     "turn2" : "Compare the results of two problem-solving approaches."
               "\nAnalyze whether the results of these two methods are consistent and provide your reasoning.",
-    "turn3" : "Determine which result is more reliable."
-              "\nRefer to the above information to provide a step-by-step analysis and your conclusion."
+    "turn3" : "Refer to the above information to provide a step-by-step analysis and your conclusion."
               "\n" + DEEPSEEK_MATH_SYSTEM_PROMPT,
 }
