@@ -59,8 +59,8 @@ def format_data_distilled(example):
 
 if __name__ == '__main__':
     # 加载数据集
-    dataset_path = "/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data/NuminaMath-CoT-cn_k12/"
-    data_file_name = "distilled_s0_e20000.jsonl"
+    dataset_path = "/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data/DeepScaler-QwQ_32b/"
+    data_file_name = "distilled_s0_e20000_20250309005632_final.json"
     dataset = load_dataset(dataset_path, data_files=data_file_name, split='train')
     print(dataset)
     dataset = dataset.map(
@@ -78,7 +78,7 @@ if __name__ == '__main__':
         list_dict.append({'messages': example['messages']})
 
     # 保存为 JSON 文件
-    with open(f"{dataset_path}/distilled_dataset_lf.json", "w", encoding="utf-8") as f:
+    with open(f"{dataset_path}/llama-factory-sft-format.json", "w", encoding="utf-8") as f:
         json.dump(list_dict, f, ensure_ascii=False, indent=2)
 
     from huggingface_hub import HfApi
@@ -91,6 +91,6 @@ if __name__ == '__main__':
     api.upload_file(
         path_or_fileobj=f"{dataset_path}/{data_file_name}",
         path_in_repo=data_file_name,
-        repo_id="tttonyyy/NMC-cn_k12-20k-r1_32b_distilled",
+        repo_id="tttonyyy/DeepScaler-QwQ_32b",
         repo_type="dataset",
     )
