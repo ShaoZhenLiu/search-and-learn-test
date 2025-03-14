@@ -1,0 +1,111 @@
+#!/usr/bin/env python
+# encoding=utf-8
+# Copyright 2024 The HuggingFace Inc. team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import time
+import json
+import logging
+import requests
+import asyncio
+import aiohttp
+from collections import deque
+from threading import Thread, Lock
+import subprocess
+
+import torch
+
+from sal.config import Config
+from sal.search import beam_search, best_of_n, dvts
+from sal.inference import iterative_generate, diff_of_n, diff_of_n_multi_turn, iterative_generate_multi_trun
+from sal.inference.direct_gen import VLLMServerManager
+from sal.inference.iterative_generate_multi_trun import MultiTurnResponseCollector
+from sal.utils.data import get_dataset, save_dataset
+from sal.utils.parser import H4ArgumentParser
+from sal.utils.rewards import sal_reward_fn
+
+logging.basicConfig(level=logging.INFO)
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+APPROACHES = {
+    "beam_search": beam_search,
+    "dvts": dvts,
+    "best_of_n": best_of_n,
+    "iter_gen": iterative_generate,
+    "diff_of_n": diff_of_n,
+    "iter_gen_multi_turn": iterative_generate_multi_trun,
+    "diff_of_n_multi_turn": diff_of_n_multi_turn,
+}
+
+
+def main():
+    parser = H4ArgumentParser(Config)
+    config = parser.parse()
+
+    # approach_fn = APPROACHES[config.approach]  # 根据不同的搜索策略，选择不同的搜索函数
+
+    num_gpus = torch.cuda.device_count()
+    print('available gpu number:', num_gpus)
+    # num_gpus = 2  # 给别人留
+    server_manager = None
+    if config.use_vllm_server:
+        server_manager = VLLMServerManager(
+            model_name=config.model_path,
+            api_key=config.api_token,
+            gpu_memory_utilization=config.gpu_memory_utilization,
+            enable_prefix_caching=True,
+            seed=config.seed,
+            gpu_count=num_gpus,
+            # node_count=1  # 单节点部署
+        )
+        # server_manager.start()
+
+    dataset = get_dataset(config)
+    problem_ls = dataset["problem"]
+
+    # 因为逻辑和前面的不一样，需要分布式+完成一条保存一条，所以这里单独实现
+    collector = MultiTurnResponseCollector(
+        problem_ls,
+        server_manager,
+        turn_count=len(config.step_prompt),
+        prompt_dict=config.step_prompt,
+    )
+    async def start():
+        await collector.start()
+
+    asyncio.run(start())
+
+    # 停止收集器和服务器
+    collector.stop()
+    server_manager.stop()
+
+    # # # 然后根据 dataset 中的解和打分，生成最好的答案
+    # # dataset = score(dataset, config)
+    # acc = None
+    # if config.calculate_correct:
+    #     dataset, acc = sal_reward_fn(dataset, config)  # 判断输出正误，同时，过滤掉错误的数据
+    #     logger.info(f"模型生成答案的准确性为: {acc}%")
+    #
+    # if config.approach == "diff_of_n":
+    #     # 如果属性 k_diff_solutions 或 pred_res 分别是 [] 和 None 的话，说明该目标生成失败，需要过滤掉
+    #     dataset = dataset.filter(lambda x: (x["k_diff_solutions"] != []) and (x["pred_result"] is not None))
+    #
+    # save_dataset(dataset, config, acc)
+    logger.info("Done 🔥!")
+
+
+if __name__ == "__main__":
+    main()
