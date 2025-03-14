@@ -38,7 +38,7 @@ def get_dataset(config: Config) -> Dataset:
     return dataset
 
 
-def save_dataset(dataset, config, acc):
+def save_dataset(dataset, config, acc=None, file_name=None):
     if config.push_to_hub:
         # Since concurrent pushes can get rejected by the Hub, we make several attempts to push the dataset with try/except
         for _ in range(20):
@@ -72,5 +72,6 @@ def save_dataset(dataset, config, acc):
         if config.output_dir is None:
             config.output_dir = f"data/{config.model_path}"
         Path(config.output_dir).mkdir(parents=True, exist_ok=True)
-        dataset.to_json(f"{config.output_dir}/bon_completions_{acc}.jsonl", lines=True)
-        logger.info(f"Saved completions to {config.output_dir}/bon_completions_{acc}.jsonl")
+        target_file = file_name if file_name is not None else f"{config.output_dir}/bon_completions_s{config.dataset_start}_e{config.dataset_end}_acc{acc}.jsonl"
+        dataset.to_json(target_file, lines=True)
+        logger.info(f"Saved completions to {target_file}")
