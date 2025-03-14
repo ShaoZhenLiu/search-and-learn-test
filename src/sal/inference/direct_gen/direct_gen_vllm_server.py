@@ -10,9 +10,13 @@ import subprocess
 
 # 1. 启动并管理 vLLM 服务
 class VLLMServerManager:
-    def __init__(self, model_name="/data/shaozhen.liu/python_project/hf_models/DeepSeek-R1-Distill-Qwen-1.5B",
-                 api_key="token-abc123",
-                 gpu_count=None, gpu_ids=None, node_count=1):
+    def __init__(self, model_name,
+                 api_key: str =None,
+                 gpu_memory_utilization: float =None,
+                 enable_prefix_caching: bool =None,
+                 gpu_count: int =None,
+                 node_count: int =1,
+                 seed: int =None,):
         self.model_name = model_name
         self.api_key = api_key
         self.process = None
@@ -23,26 +27,36 @@ class VLLMServerManager:
             "Content-Type": "application/json"
         }
         self.running = False
+
+        self.gpu_memory_utilization = gpu_memory_utilization
+        self.enable_prefix_caching = enable_prefix_caching
         self.gpu_count = gpu_count
-        self.gpu_ids = gpu_ids
         self.node_count = node_count
+        self.seed = seed
 
 
     def start(self):
-        command = ["vllm", "serve", self.model_name, "--dtype", "auto", "--api-key", self.api_key]
+        command = ["vllm", "serve", self.model_name, "--dtype", "auto"]
 
         # 添加 GPU 相关参数
-        if self.gpu_ids is not None:
-            os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, self.gpu_ids))
+        if self.api_key is not None:
+            command.extend(["--api-key", self.api_key])
+        if self.gpu_memory_utilization is not None:
+            command.extend(["--gpu-memory-utilization", str(self.gpu_memory_utilization)])
+        if self.enable_prefix_caching is not None:
+            command.extend(["--enable-prefix-caching"])
         if self.gpu_count is not None:
             command.extend(["--tensor-parallel-size", str(self.gpu_count)])
         if self.node_count > 1:
             command.extend(["--pipeline-parallel-size", str(self.node_count)])
+        if self.seed is not None:
+            command.extend(["--seed", str(self.seed)])
+        print(command)
 
         self.process = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT
+            stderr=subprocess.PIPE,
         )
         self.running = True
         print("vLLM 服务已启动，正在等待初始化完成...")
@@ -64,8 +78,7 @@ class VLLMServerManager:
                     print("vLLM 服务已初始化完成")
                     break
             except requests.exceptions.ConnectionError as e:
-                print(e)
-                time.sleep(1)
+                time.sleep(10)
 
     def stop(self):
         if self.running and self.process:
@@ -79,6 +92,8 @@ class ResponseCollector:
     def __init__(self, dataset, server_manager):
         self.dataset = dataset
         self.server_manager = server_manager
+
+        self.worker_num = 10
         self.queue = deque(enumerate(self.dataset))
         self.lock = Lock()
         self.running = False
@@ -150,7 +165,7 @@ class ResponseCollector:
     async def start(self):
         self.running = True
         async with aiohttp.ClientSession() as session:
-            tasks = [self.worker(session) for _ in range(10)]  # 使用10个并发工作者
+            tasks = [self.worker(session) for _ in range(self.worker_num)]  # 使用10个并发工作者
             await asyncio.gather(*tasks)
 
     def stop(self):
