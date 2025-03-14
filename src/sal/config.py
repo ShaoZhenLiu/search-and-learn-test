@@ -54,13 +54,14 @@ STEP_PROMPT_TYPE = {
 @dataclass
 class Config:
     approach: Literal[
-        "best_of_n", "beam_search", "dvts", "iter_gen", "diff_of_n", "diff_of_n_multi_turn"
-    ] = "diff_of_n_multi_turn"
+        "best_of_n", "beam_search", "dvts", "iter_gen", "diff_of_n", "diff_of_n_multi_turn", "iter_gen_multi_turn"
+    ] = "iter_gen_multi_turn"
     model_path: str = "/data/shaozhen.liu/python_project/hf_models/gemma-2-27b-it/"
-    gpu_memory_utilization: float = (
-        0.5  # vllm is allocated 0.5 of GPU memory, the PRM uses the rest
-    )
+    gpu_memory_utilization: float = 0.95
     prm_path: str = "/data/shaozhen.liu/python_project/hf_models/Llama3.1-8B-PRM-Deepseek-Data"
+    use_vllm_server: bool = True  # 是否使用 `vllm serve` 命令初始化一个服务端进行推理
+    api_token: str = None  # 创建服务器后进行校验
+
     # Output Related Options
     output_dir: str = "./data"
     num_proc: int = None
