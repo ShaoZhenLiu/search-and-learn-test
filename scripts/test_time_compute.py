@@ -22,7 +22,8 @@ from vllm import LLM
 from sal.config import Config
 from sal.models.reward_models import load_prm
 from sal.search import beam_search, best_of_n, dvts
-from sal.inference import iterative_generate, diff_of_n, diff_of_n_multi_turn, iterative_generate_multi_trun
+from sal.inference import iterative_generate, diff_of_n, diff_of_n_multi_turn, iterative_generate_multi_turn
+from sal.inference.direct_gen import VLLMServerManager
 from sal.utils.data import get_dataset, save_dataset
 from sal.utils.parser import H4ArgumentParser
 from sal.utils.score import score
@@ -40,7 +41,7 @@ APPROACHES = {
     "best_of_n": best_of_n,
     "iter_gen": iterative_generate,
     "diff_of_n": diff_of_n,
-    "iter_gen_multi_turn": iterative_generate_multi_trun,
+    "iter_gen_multi_turn": iterative_generate_multi_turn,
     "diff_of_n_multi_turn": diff_of_n_multi_turn,
 }
 
@@ -54,14 +55,17 @@ def main():
     num_gpus = torch.cuda.device_count()
     print('available gpu number:', num_gpus)
     # num_gpus = 2  # 给别人留
+    # if config.use_vllm_server:
+    #     pass
+    # else:
     llm = LLM(
         model=config.model_path,
-        # gpu_memory_utilization=config.gpu_memory_utilization,
+        gpu_memory_utilization=config.gpu_memory_utilization,
         enable_prefix_caching=True,
         seed=config.seed,
         tensor_parallel_size=num_gpus,
     )
-    prm = None if config.approach in ["iter_gen", "diff_of_n"] else load_prm(config)
+    prm = None if config.approach in ["iter_gen", "diff_of_n", "iter_gen_multi_turn", "diff_of_n_multi_turn"] else load_prm(config)
 
     dataset = get_dataset(config)
 
@@ -70,10 +74,14 @@ def main():
         approach_fn,
         batched=True,
         batch_size=config.search_batch_size,
-        fn_kwargs={"config": config, "llm": llm} if config.approach in ["iter_gen", "diff_of_n"] else {"config": config, "llm": llm, "prm": prm},
+        fn_kwargs={"config": config, "llm": llm} if config.approach in \
+                                                    ["iter_gen", "diff_of_n", "iter_gen_multi_turn", "diff_of_n_multi_turn"] \
+                                                 else {"config": config, "llm": llm, "prm": prm},
         desc="Running search",
         load_from_cache_file=False,
     )
+
+    save_dataset(dataset, config)
 
     # # 然后根据 dataset 中的解和打分，生成最好的答案
     # dataset = score(dataset, config)
