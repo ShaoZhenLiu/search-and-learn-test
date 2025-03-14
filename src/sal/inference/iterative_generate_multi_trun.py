@@ -59,8 +59,9 @@ def vllm_generate(convs_ls, config: Config, llm: LLM):
     )
     responses = sorted(responses, key=lambda x: int(x.request_id))  # sort outputs by request_id
     outputs = [output.outputs[0].text for output in responses]
+    output_token_ids_ls = [len(output.outputs[0].token_ids) for output in responses]
 
-    return responses, outputs
+    return responses, outputs, output_token_ids_ls
 
 
 def _iterative_generate_multi_turn(batch_of_prompts, config: Config, llm: LLM) -> dict:
@@ -71,9 +72,12 @@ def _iterative_generate_multi_turn(batch_of_prompts, config: Config, llm: LLM) -
         ]
         for p_index, problem in enumerate(batch_of_prompts)  # 有几个问题，就构造几个对话
     ]  # 构建对话 prompt
+    token_len_ls = []
+
 
     def generate_convs(old_convs, prompt_index):
-        responses, outputs_ls = vllm_generate(old_convs, config, llm)
+        responses, outputs_ls, output_token_ls = vllm_generate(old_convs, config, llm)
+        token_len_ls.append(output_token_ls)
         new_convs = [
             [
                 *conv,
@@ -86,7 +90,8 @@ def _iterative_generate_multi_turn(batch_of_prompts, config: Config, llm: LLM) -
 
     for i in range(1, 4):
         convs = generate_convs(convs, prompt_index=i)
-    responses, outputs_ls = vllm_generate(convs, config, llm)  # 得到最终的答案
+    responses, outputs_ls, output_token_ls = vllm_generate(convs, config, llm)  # 得到最终的答案
+    token_len_ls.append(output_token_ls)
     final_convs = [
         [
             *conv,
@@ -95,7 +100,11 @@ def _iterative_generate_multi_turn(batch_of_prompts, config: Config, llm: LLM) -
         for conv_index, (conv, output) in enumerate(zip(convs, outputs_ls))
     ]
 
+    # 将token_len的形状从 [4, batch] 变成 [batch, 4]
+    new_token_len_ls = [list(token_ls) for token_ls in zip(*token_len_ls)]
+
     step_result = {
+        "pred_cot_token_len": new_token_len_ls,
         "messages": final_convs,
     }
 
@@ -108,6 +117,17 @@ def iterative_generate_multi_turn(examples, config: Config, llm: LLM):
     """
     problems = examples["problem"]
     step_result = _iterative_generate_multi_turn(problems, config, llm)
+
+    if config.calculate_correct:
+        correctness = [
+            _sal_reward_fn(
+                solution_str=messages[-1]["content"],  # 最后一个回答会输出在\boxed{}中的答案
+                ground_truth=answer,
+                enable_llm=False, check_think=False,
+            )
+            for answer, messages in zip(examples["answer"], step_result["messages"])
+        ]
+        step_result["correct"] = correctness
 
     # # Group together alike beams and store in the dataset
     # grouped_results = defaultdict(list)
