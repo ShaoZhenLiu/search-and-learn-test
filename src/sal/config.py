@@ -22,6 +22,7 @@ from huggingface_hub import get_full_repo_name
 
 from sal.utils.hub import get_dataset_revisions
 from sal.utils.prompts import (
+    DEEPSEEK_MATH_SYSTEM_PROMPT,
     LLAMA_MATH_SYSTEM_PROMPT,
     LLAMA_MATH_SYSTEM_PROMPT_MODIFY,
     ITER_GEN_STEP_PROMPTS,
@@ -36,7 +37,7 @@ SYSTEM_PROMPT_TYPE = {
     "dvts": LLAMA_MATH_SYSTEM_PROMPT,
     "iter_gen": LLAMA_MATH_SYSTEM_PROMPT_MODIFY,
     "diff_of_n": LLAMA_MATH_SYSTEM_PROMPT_MODIFY,
-    "iter_gen_multi_turn": LLAMA_MATH_SYSTEM_PROMPT,
+    "iter_gen_multi_turn": DEEPSEEK_MATH_SYSTEM_PROMPT,
     "diff_of_n_multi_turn": LLAMA_MATH_SYSTEM_PROMPT,
 }
 
