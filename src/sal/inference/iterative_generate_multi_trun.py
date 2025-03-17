@@ -31,6 +31,7 @@ from sal.config import Config
 logger = logging.getLogger()
 from sal.utils.score import aggregate_scores
 from sal.inference.direct_gen import ResponseCollector
+from sal.utils.rewards.math_reward import _sal_reward_fn
 
 
 def vllm_generate(convs_ls, config: Config, llm: LLM):
@@ -115,7 +116,8 @@ def iterative_generate_multi_turn(examples, config: Config, llm: LLM):
     """
     examples: 根据 config.search_batch_size 调整里面的个数，默认为25
     """
-    problems = examples["problem"]
+    problems = examples["problem"] if examples.get("problem", None) is not None else examples["question"]
+    answers = examples["answer"] if examples.get("answer", None) is not None else examples["gt"]
     step_result = _iterative_generate_multi_turn(problems, config, llm)
 
     if config.calculate_correct:
@@ -125,7 +127,7 @@ def iterative_generate_multi_turn(examples, config: Config, llm: LLM):
                 ground_truth=answer,
                 enable_llm=False, check_think=False,
             )
-            for answer, messages in zip(examples["answer"], step_result["messages"])
+            for answer, messages in zip(answers, step_result["messages"])
         ]
         step_result["correct"] = correctness
 

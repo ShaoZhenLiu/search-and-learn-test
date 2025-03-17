@@ -139,7 +139,7 @@ def sal_reward_fn(dataset: Dataset, config: Config):
         lambda x: {
             "correct": _sal_reward_fn(
                 solution_str=x["messages"][-1]["content"],  # 最后一个回答会输出在\boxed{}中的答案
-                ground_truth=x["answer"],
+                ground_truth=x["answer"] if x.get("answer", None) is not None else x["gt"],
                 enable_llm=False, check_think=False,
             )
         }
