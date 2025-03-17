@@ -8,6 +8,6 @@ dataset_end: 20000
 seed: 42
 
 model_path: /data/shaozhen.liu/python_project/hf_models/Qwen2.5-7B-Instruct
-dataset_name: /data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-Preview-Dataset
-dataset_files: deepscaler.json
-output_dir: /data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-Preview-Dataset
+dataset_name: /data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-distilled-32b
+dataset_files: distilled_s0_e20000_20250309005632.jsonl
+output_dir: /data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-distilled-32b
