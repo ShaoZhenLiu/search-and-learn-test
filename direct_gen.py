@@ -46,7 +46,7 @@ def parse_args():
     parser.add_argument("--top_p", default=1, type=float)
     parser.add_argument("--max_tokens_per_call", default=16384, type=int)
     parser.add_argument("--batch_size", default=10, type=int)
-    parser.add_argument("--shuffle", default=True)
+    parser.add_argument("--shuffle", default=False)  # 不加shuffle，容易重现
     # parser.add_argument("--use_vllm", default=True)
     parser.add_argument("--overwrite", default=True)
     parser.add_argument("--correct_answer_only", default=True)
@@ -140,7 +140,8 @@ def construct_prompt(example, data_name, args):
         )
     else:
         raise NotImplementedError("这个数据集的prompt尚未实现")
-    context = input_template.format(input=example["problem"])
+    question = example["question"] if example.get("question", None) is not None else example["problem"]
+    context = input_template.format(input=question)
     return context
 
 
@@ -157,9 +158,9 @@ def get_samples(examples_ls, data_name):
         # parse question and answer
         sample = {
             "idx": idx,
-            "question": example["problem"],
-            "gt_cot": example["solution"],
-            "gt": example["answer"],
+            "question": example["question"] if example.get("question", None) is not None else example["problem"],
+            "gt_cot": example["gt_cot"] if example.get("gt_cot", None) is not None else example["solution"],
+            "gt": example["gt"] if example.get("gt", None) is not None else example["answer"],
             "prompt": full_prompt,
         }
 
@@ -222,7 +223,7 @@ def outputs_to_samples(origin_samples_ls, outputs_ls, output_token_ids_ls, args_
 
         # result checking: if any real_output is incorrect, then the sample will be dropped
         correct_ls = [simple_reward_fn(solution_str=res, ground_truth=sample['gt']) for res in real_output]
-        is_correct = False if False in correct_ls else True
+        is_correct = True if True in correct_ls else False  # pass@n
         # correct_count += is_correct
 
         sample.pop("prompt")
@@ -269,6 +270,7 @@ def main(llm, tokenizer, data_name, args):
     # 恢复处理进度
     resume_idx = load_checkpoint(args)
     processed = resume_idx * args.n_sampling  # 保证n_sampling可以正常执行
+    args.batch_size = args.batch_size * args.n_sampling
 
     # 初始化进度条（自动从断点位置开始）
     pbar = tqdm(
@@ -316,8 +318,8 @@ def main(llm, tokenizer, data_name, args):
             token_len_ls = []
 
             # 生成最终输出文件
-            print(f"Saving data to: {out_file.replace(".jsonl", f"_final.json")}")
-            with open(out_file, 'r') as fin, open(out_file.replace(".jsonl", f"_final.json"), 'w') as fout:
+            print(f"Saving data to: {out_file.replace(".jsonl", f"_final.jsonl")}")
+            with open(out_file, 'r') as fin, open(out_file.replace(".jsonl", f"_final.jsonl"), 'w') as fout:
                 for line in fin:
                     data = json.loads(line)
                     correct_count += data["correct"]
