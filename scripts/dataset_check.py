@@ -38,9 +38,15 @@ def add_gt(example):
 def add_pred_cot(example):
     pass
 
-
-def add_pred_cot_token_len(example):
-    pass
+token_len_sum = []
+def add_pred_cot_token_len(example, tokenizer):
+    # token_len_ls = [len(tokenizer.tokenize(messages["content"])) for messages in example["messages"] if messages["role"] == "assistant"]
+    # token_len_sum.append(sum(token_len_ls))
+    token_len_sum.append(sum(example["pred_cot_token_len"]))
+    # print(token_len_ls)
+    # return {
+    #     "pred_cot_token_len": sum(token_len_ls)
+    # }
 
 
 def add_correct(example):
@@ -56,17 +62,33 @@ def add_correct(example):
 
 if __name__ == '__main__':
     # 加载数据集
-    dataset_path = "/data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-Preview-Dataset"
-    data_file_name = "bon_completions_s0_e0_accNone.jsonl"
+    dataset_path = "/data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-distilled-32b"
+    data_file_name = "bon_completions_s0_e20000_accNone.jsonl"
     dataset = load_dataset(dataset_path, data_files=data_file_name, split='train')
     print(dataset)
+    # dataset = dataset.map(
+    #     add_correct,
+    #     batched=False,
+    #     desc="add correct label",
+    #     load_from_cache_file=False,
+    # )
+
+    from transformers import AutoTokenizer
+
+    model_path = "/data/shaozhen.liu/python_project/hf_models/Qwen2.5-7B-Instruct"
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
     dataset = dataset.map(
-        add_correct,
+        add_pred_cot_token_len,
         batched=False,
-        desc="add correct label",
+        desc="add token len",
+        fn_kwargs={"tokenizer": tokenizer},
         load_from_cache_file=False,
     )
-    dataset.to_json(f"{dataset_path}/{data_file_name}")
+    print(dataset["pred_cot_token_len"][0])
+    print(sum(token_len_sum) / len(token_len_sum))
+
+    # dataset.to_json(f"{dataset_path}/{data_file_name}")
+
     # # 转换为列表字典
     # list_dict = []
     # for example in dataset:
@@ -85,7 +107,7 @@ if __name__ == '__main__':
     # # )
     # api.upload_file(
     #     path_or_fileobj=f"{dataset_path}/{data_file_name}",
-    #     path_in_repo=data_file_name,
-    #     repo_id="tttonyyy/DeepScaler-QwQ_32b",
+    #     path_in_repo="train.jsonl",
+    #     repo_id="tttonyyy/DeepScale-qwen2.5_7b-multi",
     #     repo_type="dataset",
     # )
