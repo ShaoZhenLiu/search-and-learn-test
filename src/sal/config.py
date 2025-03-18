@@ -91,12 +91,12 @@ class Config:
     # Search Related Options
     n: int = 4
     temperature: float = 0.6  # 更低一点 0.6 或 0.4
-    top_p: float = 0.95
-    top_k: int = 100
+    top_p: float = 1.0  # 0.95
+    top_k: int = -1  # 100
     prm_batch_size: int = 4
     search_batch_size: int = 25
     seed: int = 42
-    max_tokens: int = 2048
+    max_tokens: int = 20480
     agg_strategy: str = "last"  # Options: "last", "min", "prod"
 
     # DVTS / Beam Search options
