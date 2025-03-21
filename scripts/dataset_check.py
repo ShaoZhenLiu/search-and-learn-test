@@ -40,21 +40,42 @@ def add_pred_cot(example):
 
 token_len_sum = []
 def add_pred_cot_token_len(example, tokenizer):
-    # token_len_ls = [len(tokenizer.tokenize(messages["content"])) for messages in example["messages"] if messages["role"] == "assistant"]
-    # token_len_sum.append(sum(token_len_ls))
-    token_len_sum.append(sum(example["pred_cot_token_len"]))
-    # print(token_len_ls)
-    # return {
-    #     "pred_cot_token_len": sum(token_len_ls)
-    # }
+    if example.get("pred_cot_token_len", None) is not None:
+        if isinstance(example["pred_cot_token_len"], list):
+            token_len_sum.append(sum(example["pred_cot_token_len"]) / len(example["pred_cot_token_len"]))
+        else:
+            token_len_sum.append(example["pred_cot_token_len"])
+        return {
+            "pred_cot_token_len": example["pred_cot_token_len"]
+        }
+    else:
+        token_len_ls = [len(tokenizer.tokenize(messages["content"])) for messages in example["messages"] if messages["role"] == "assistant"]
+        token_len_sum.append(sum(token_len_ls))
+        print(token_len_ls)
+        return {
+            "pred_cot_token_len": sum(token_len_ls)
+        }
 
-
+correct_count = 0
 def add_correct(example):
-    correctness = _sal_reward_fn(
-        solution_str=example["messages"][-1]["content"],  # 最后一个回答会输出在\boxed{}中的答案
-        ground_truth=example["answer"],
-        enable_llm=False, check_think=False,
-    )
+    if example.get("correct", None) is not None:
+        correctness = example["correct"]
+    elif example.get("messages", None) is not None:
+        correctness = _sal_reward_fn(
+            solution_str=example["messages"][-1]["content"],  # 最后一个回答会输出在\boxed{}中的答案
+            ground_truth=example["answer"],
+            enable_llm=False, check_think=False,
+        )
+    else:
+        correctness = _sal_reward_fn(
+            solution_str=example["pred_cot"],
+            ground_truth=example["gt"],
+            enable_llm=False, check_think=False,
+        )
+
+    global correct_count
+    correct_count += correctness
+
     return {
         "correct": correctness
     }
@@ -62,20 +83,21 @@ def add_correct(example):
 
 if __name__ == '__main__':
     # 加载数据集
-    dataset_path = "/data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-distilled-32b"
-    data_file_name = "bon_completions_s0_e20000_accNone.jsonl"
+    dataset_path = "/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data/DeepScaler-QwQ_32b/20k_7b_pass@8_results/DeepScaler-QwQ_32b"
+    data_file_name = "distilled_s0_e-1_20250318222934.jsonl"
     dataset = load_dataset(dataset_path, data_files=data_file_name, split='train')
     print(dataset)
-    # dataset = dataset.map(
-    #     add_correct,
-    #     batched=False,
-    #     desc="add correct label",
-    #     load_from_cache_file=False,
-    # )
+    dataset = dataset.map(
+        add_correct,
+        batched=False,
+        desc="add correct label",
+        load_from_cache_file=False,
+    )
+    print(f"acc: {correct_count / len(dataset)}")
 
     from transformers import AutoTokenizer
 
-    model_path = "/data/shaozhen.liu/python_project/hf_models/Qwen2.5-7B-Instruct"
+    model_path = "/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/models/Qwen2.5-7B-Instruct"
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     dataset = dataset.map(
         add_pred_cot_token_len,
@@ -84,8 +106,7 @@ if __name__ == '__main__':
         fn_kwargs={"tokenizer": tokenizer},
         load_from_cache_file=False,
     )
-    print(dataset["pred_cot_token_len"][0])
-    print(sum(token_len_sum) / len(token_len_sum))
+    print(f"avg token len: {sum(token_len_sum) / len(token_len_sum)}")
 
     # dataset.to_json(f"{dataset_path}/{data_file_name}")
 

@@ -64,6 +64,7 @@ def main():
         enable_prefix_caching=True,
         seed=config.seed,
         tensor_parallel_size=num_gpus,
+        max_num_seqs=1024,
     )
     prm = None if config.approach in ["iter_gen", "diff_of_n", "iter_gen_multi_turn", "diff_of_n_multi_turn"] else load_prm(config)
 

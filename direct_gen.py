@@ -90,8 +90,9 @@ def prepare_data(data_name, args):
     # get out_file name
     # out_file_prefix = f"{args.split}_{args.prompt_type}_{args.num_test_sample}_seed{args.seed}_t{args.temperature}"
     output_dir = args.output_dir
-    if not os.path.exists(output_dir):
-        output_dir = f"outputs/{output_dir}"
+    if not os.path.exists(output_dir):  # 如果输出目录不存在，则创建
+        # output_dir = f"outputs/{output_dir}"
+        os.makedirs(os.path.dirname(out_file), exist_ok=True)
     date_time = time.strftime("%Y%m%d%H%M%S", time.localtime())
     out_file = f"{output_dir}/{data_name}/distilled_s{args.start}_e{args.end}_{date_time}.jsonl"
 
@@ -108,8 +109,9 @@ def setup(args):
         pipeline_parallel_size=args.pipeline_parallel_size,
         trust_remote_code=True,
         gpu_memory_utilization=0.95,
-        enforce_eager=True,
-        max_num_seqs=128,
+        # enforce_eager=True,
+        max_num_seqs=512,  # 一次最多生成512个序列
+        enable_prefix_caching=True,  # 使用前缀缓存
         # enable_chunked_prefill=True,
     )
     tokenizer = None
@@ -270,7 +272,10 @@ def main(llm, tokenizer, data_name, args):
     # 恢复处理进度
     resume_idx = load_checkpoint(args)
     processed = resume_idx * args.n_sampling  # 保证n_sampling可以正常执行
-    args.batch_size = args.batch_size * args.n_sampling
+    if args.batch_size == -1:  # 默认一次生成全部
+        args.batch_size = len(input_prompts)
+    else:
+        args.batch_size = args.batch_size * args.n_sampling
 
     # 初始化进度条（自动从断点位置开始）
     pbar = tqdm(
@@ -323,12 +328,15 @@ def main(llm, tokenizer, data_name, args):
                 for line in fin:
                     data = json.loads(line)
                     correct_count += data["correct"]
-                    token_len_ls.append(data["pred_cot_token_len"])
+                    if isinstance(data["pred_cot_token_len"], list):  # 如果n_sample不为1，则pred_cot_token_len是列表，则取平均值
+                        token_len_ls.append(sum(data["pred_cot_token_len"]) / len(data["pred_cot_token_len"]))
+                    else:
+                        token_len_ls.append(data["pred_cot_token_len"])
                     if args.correct_answer_only and data["correct"]:  # 只保存对的输出
                         fout.write(json.dumps(data) + '\n')
 
-            avg_token_len = sum(token_len_ls) / len(input_prompts)
-            acc = correct_count / len(input_prompts) * 100
+            avg_token_len = sum(token_len_ls) / len(samples)
+            acc = correct_count / len(samples) * 100
             print(f"模型生成回答的平均token长度为: {avg_token_len}")
             print(f"模型生成答案的准确率为: {acc} %")
             result_json = {

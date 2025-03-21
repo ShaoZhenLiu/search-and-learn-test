@@ -391,11 +391,9 @@ DIFF_OF_N_MULTI_TURN_STEP_PROMPTS = {
 }
 
 ITER_GEN_MULTI_TURN_STEP_PROMPTS = {
-    "turn0" : "{{ problem }}\n" + DEEPSEEK_MATH_SYSTEM_PROMPT,
-    "turn1" : "Please propose a new problem-solving approach that is significantly different from the previous solution."
-              "\n" + DEEPSEEK_MATH_SYSTEM_PROMPT,
+    "turn0" : "{{ problem }}",
+    "turn1" : "Please propose a new problem-solving approach that is significantly different from the previous solution.",
     "turn2" : "Compare the results of two problem-solving approaches."
               "\nAnalyze whether the results of these two methods are consistent and provide your reasoning.",
-    "turn3" : "Refer to the above information to provide a step-by-step analysis and your conclusion."
-              "\n" + DEEPSEEK_MATH_SYSTEM_PROMPT,
+    "turn3" : "Refer to the above information to provide a step-by-step analysis and your conclusion.",
 }

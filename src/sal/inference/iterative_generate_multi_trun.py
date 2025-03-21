@@ -48,7 +48,7 @@ def vllm_generate(convs_ls, config: Config, llm: LLM):
         temperature=config.temperature,
         max_tokens=config.max_tokens,
         top_p=config.top_p,  # 解码过程中，概率累积到多少的时候截断
-        top_k=config.top_k,
+        # top_k=config.top_k,
         best_of=1,  # 每次都生成1个
         # n=config.n if i == 0 else 1,  # 第一次返回n个，之后就只返回1个
     )
