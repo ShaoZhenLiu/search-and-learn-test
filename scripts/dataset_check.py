@@ -57,13 +57,11 @@ def add_pred_cot_token_len(example, tokenizer):
         }
 
 correct_count = 0
-def add_correct(example):
-    if example.get("correct", None) is not None:
-        correctness = example["correct"]
-    elif example.get("messages", None) is not None:
+def add_correct(example, turn_idx=2):
+    if example.get("messages", None) is not None:
         correctness = _sal_reward_fn(
-            solution_str=example["messages"][-1]["content"],  # 最后一个回答会输出在\boxed{}中的答案
-            ground_truth=example["answer"],
+            solution_str=example["messages"][turn_idx]["content"],  # 最后一个回答会输出在\boxed{}中的答案
+            ground_truth=example["answer"] if example.get("answer", None) is not None else example["gt"],
             enable_llm=False, check_think=False,
         )
     else:
@@ -83,30 +81,56 @@ def add_correct(example):
 
 if __name__ == '__main__':
     # 加载数据集
-    dataset_path = "/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data/DeepScaler-QwQ_32b/20k_7b_pass@8_results/DeepScaler-QwQ_32b"
-    data_file_name = "distilled_s0_e-1_20250318222934.jsonl"
+    dataset_path = "/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data/DeepScaler-QwQ_32b/multi_turn_results_16k_32b"
+    data_file_name = "bon_completions_s0_eNone_accNone.jsonl"
     dataset = load_dataset(dataset_path, data_files=data_file_name, split='train')
     print(dataset)
+    correct_count = 0
+    turn_idx = 2
     dataset = dataset.map(
         add_correct,
         batched=False,
         desc="add correct label",
+        fn_kwargs={"turn_idx": turn_idx},
         load_from_cache_file=False,
     )
-    print(f"acc: {correct_count / len(dataset)}")
+    print(f"acc for turn {turn_idx}: {correct_count / len(dataset)}")
 
-    from transformers import AutoTokenizer
-
-    model_path = "/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/models/Qwen2.5-7B-Instruct"
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    correct_count = 0
+    turn_idx = 4
     dataset = dataset.map(
-        add_pred_cot_token_len,
+        add_correct,
         batched=False,
-        desc="add token len",
-        fn_kwargs={"tokenizer": tokenizer},
+        desc="add correct label",
+        fn_kwargs={"turn_idx": turn_idx},
         load_from_cache_file=False,
     )
-    print(f"avg token len: {sum(token_len_sum) / len(token_len_sum)}")
+    print(f"acc for turn {turn_idx}: {correct_count / len(dataset)}")
+
+
+    correct_count = 0
+    turn_idx = -1
+    dataset = dataset.map(
+        add_correct,
+        batched=False,
+        desc="add correct label",
+        fn_kwargs={"turn_idx": turn_idx},
+        load_from_cache_file=False,
+    )
+    print(f"acc for turn {turn_idx}: {correct_count / len(dataset)}")
+
+    # from transformers import AutoTokenizer
+
+    # model_path = "/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/models/Qwen2.5-7B-Instruct"
+    # tokenizer = AutoTokenizer.from_pretrained(model_path)
+    # dataset = dataset.map(
+    #     add_pred_cot_token_len,
+    #     batched=False,
+    #     desc="add token len",
+    #     fn_kwargs={"tokenizer": tokenizer},
+    #     load_from_cache_file=False,
+    # )
+    # print(f"avg token len: {sum(token_len_sum) / len(token_len_sum)}")
 
     # dataset.to_json(f"{dataset_path}/{data_file_name}")
 
