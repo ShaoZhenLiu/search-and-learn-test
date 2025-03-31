@@ -10,8 +10,10 @@
 
 import json
 from datasets import load_dataset
+# from math_verify import parse, verify
 
 from sal.utils.rewards.math_reward import _sal_reward_fn
+from sal.utils.rewards.math_utils import extract_answer
 
 
 def add_message(example):
@@ -56,81 +58,105 @@ def add_pred_cot_token_len(example, tokenizer):
             "pred_cot_token_len": sum(token_len_ls)
         }
 
-correct_count = 0
-def add_correct(example, turn_idx=2):
-    if example.get("messages", None) is not None:
-        correctness = _sal_reward_fn(
-            solution_str=example["messages"][turn_idx]["content"],  # 最后一个回答会输出在\boxed{}中的答案
-            ground_truth=example["answer"] if example.get("answer", None) is not None else example["gt"],
-            enable_llm=False, check_think=False,
-        )
-    else:
-        correctness = _sal_reward_fn(
-            solution_str=example["pred_cot"],
-            ground_truth=example["gt"],
-            enable_llm=False, check_think=False,
-        )
+def process_cot_token_len(dataset):
+    from transformers import AutoTokenizer
 
-    global correct_count
-    correct_count += correctness
+    model_path = "/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/models/Qwen2.5-7B-Instruct"
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    dataset = dataset.map(
+        add_pred_cot_token_len,
+        batched=False,
+        desc="add token len",
+        fn_kwargs={"tokenizer": tokenizer},
+        load_from_cache_file=False,
+    )
+    print(f"avg token len: {sum(token_len_sum) / len(token_len_sum)}")
+
+
+# correct_count = 0
+def add_correct(example, turn_idx=2, correct_tag="correct"):
+    if example.get("messages", None) is not None:
+        if isinstance(example["messages"][0], list):  # pass@1+avg8
+            answer = example["answer"] if example.get("answer", None) is not None else example["gt"]
+            correct_ls = [
+                _sal_reward_fn(
+                    solution_str=ms[turn_idx]["content"],  # 最后一个回答会输出在\boxed{}中的答案
+                    ground_truth=answer,
+                    enable_llm=False, check_think=False,
+                )
+                for ms in example["messages"]
+            ]
+            # correct_ls = []
+            # for ms in example["messages"]:
+            #     print(extract_answer(ms[turn_idx]["content"]))
+            #     # print(parse("$${}$$".format(answer)))
+            #     c = verify(
+            #         parse("$${}$$".format(answer)),
+            #         parse(extract_answer(ms[turn_idx]["content"]))
+            #     )
+            #     correct_ls.append(c)
+            correctness = sum(map(int, correct_ls)) / len(correct_ls)
+        elif isinstance(example["messages"][0], dict):  # pass@1+avg1
+            correctness = _sal_reward_fn(
+                solution_str=example["messages"][turn_idx]["content"],  # 最后一个回答会输出在\boxed{}中的答案
+                ground_truth=example["answer"] if example.get("answer", None) is not None else example["gt"],
+                enable_llm=False, check_think=False,
+            )
+    else:
+        if len(example["pred_cot"]) > 1:
+            correct_ls = [
+                _sal_reward_fn(
+                    solution_str=pc,  # 最后一个回答会输出在\boxed{}中的答案
+                    ground_truth=example["gt"],
+                    enable_llm=False, check_think=False,
+                )
+                for pc in example["pred_cot"]
+            ]
+            correctness = sum(map(int, correct_ls)) / len(correct_ls)
+        else:
+            correctness = _sal_reward_fn(
+                solution_str=example["pred_cot"],
+                ground_truth=example["gt"],
+                enable_llm=False, check_think=False,
+            )
+
+    # global correct_count
+    # correct_count += correctness
 
     return {
-        "correct": correctness
+        correct_tag: correctness
     }
 
+def calculate_correct_turn(dataset, turn_idx_ls):
+    """
+
+    """
+    for turn_id in turn_idx_ls:
+        tag = f"correct_turn{turn_id}"
+        dataset = dataset.map(
+            add_correct,
+            batched=False,
+            desc="add correct label",
+            fn_kwargs={"turn_idx": turn_id, "correct_tag": tag},
+            load_from_cache_file=False,
+        )
+        acc = sum(dataset[tag]) / len(dataset) * 100
+        print(f"acc for turn {turn_id}: {acc}%")
+    # 对数据进行过滤，过滤出turn2和turn4正确，但是turn-1错误的数据
+    new_dataset = dataset.filter(lambda x: x["correct_turn2"] == True and x["correct_turn4"] == False and x["correct_turn-1"] == True)
+    print(len(new_dataset))
+    print(new_dataset["idx"])
+    return
 
 if __name__ == '__main__':
     # 加载数据集
-    dataset_path = "/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data/DeepScaler-QwQ_32b/multi_turn_results_16k_32b"
-    data_file_name = "bon_completions_s0_eNone_accNone.jsonl"
+    dataset_path = "/data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-1k-7b"
+    data_file_name = "bon_completions_s0_e1000_accNone_03301852.jsonl"
     dataset = load_dataset(dataset_path, data_files=data_file_name, split='train')
     print(dataset)
-    correct_count = 0
-    turn_idx = 2
-    dataset = dataset.map(
-        add_correct,
-        batched=False,
-        desc="add correct label",
-        fn_kwargs={"turn_idx": turn_idx},
-        load_from_cache_file=False,
-    )
-    print(f"acc for turn {turn_idx}: {correct_count / len(dataset)}")
+    print(dataset["correct"][0])
 
-    correct_count = 0
-    turn_idx = 4
-    dataset = dataset.map(
-        add_correct,
-        batched=False,
-        desc="add correct label",
-        fn_kwargs={"turn_idx": turn_idx},
-        load_from_cache_file=False,
-    )
-    print(f"acc for turn {turn_idx}: {correct_count / len(dataset)}")
-
-
-    correct_count = 0
-    turn_idx = -1
-    dataset = dataset.map(
-        add_correct,
-        batched=False,
-        desc="add correct label",
-        fn_kwargs={"turn_idx": turn_idx},
-        load_from_cache_file=False,
-    )
-    print(f"acc for turn {turn_idx}: {correct_count / len(dataset)}")
-
-    # from transformers import AutoTokenizer
-
-    # model_path = "/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/models/Qwen2.5-7B-Instruct"
-    # tokenizer = AutoTokenizer.from_pretrained(model_path)
-    # dataset = dataset.map(
-    #     add_pred_cot_token_len,
-    #     batched=False,
-    #     desc="add token len",
-    #     fn_kwargs={"tokenizer": tokenizer},
-    #     load_from_cache_file=False,
-    # )
-    # print(f"avg token len: {sum(token_len_sum) / len(token_len_sum)}")
+    calculate_correct_turn(dataset, [2, 4, -1])
 
     # dataset.to_json(f"{dataset_path}/{data_file_name}")
 
@@ -142,17 +168,3 @@ if __name__ == '__main__':
     # # 保存为 JSON 文件
     # with open(f"{dataset_path}/llama-factory-sft-format.json", "w", encoding="utf-8") as f:
     #     json.dump(list_dict, f, ensure_ascii=False, indent=2)
-    #
-    # from huggingface_hub import HfApi
-    #
-    # api = HfApi()
-    # # api.create_repo(
-    # #     repo_id="tttonyyy/NuminaMath-CoT-cn_k12-20000",
-    # #     repo_type="dataset",
-    # # )
-    # api.upload_file(
-    #     path_or_fileobj=f"{dataset_path}/{data_file_name}",
-    #     path_in_repo="train.jsonl",
-    #     repo_id="tttonyyy/DeepScale-qwen2.5_7b-multi",
-    #     repo_type="dataset",
-    # )

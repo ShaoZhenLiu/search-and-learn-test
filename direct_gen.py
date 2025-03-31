@@ -43,6 +43,7 @@ def parse_args():
     parser.add_argument("--end", default=-1, type=int)
     parser.add_argument("--temperature", default=0.6, type=float)
     parser.add_argument("--n_sampling", default=1, type=int)
+    parser.add_argument("--agg_method", default="pass@n", type=str, choices=["avg@n", "pass@n"])
     parser.add_argument("--top_p", default=1, type=float)
     parser.add_argument("--max_tokens_per_call", default=16384, type=int)
     parser.add_argument("--batch_size", default=10, type=int)
@@ -92,7 +93,7 @@ def prepare_data(data_name, args):
     output_dir = args.output_dir
     if not os.path.exists(output_dir):  # 如果输出目录不存在，则创建
         # output_dir = f"outputs/{output_dir}"
-        os.makedirs(os.path.dirname(out_file), exist_ok=True)
+        os.makedirs(os.path.dirname(output_dir), exist_ok=True)
     date_time = time.strftime("%Y%m%d%H%M%S", time.localtime())
     out_file = f"{output_dir}/{data_name}/distilled_s{args.start}_e{args.end}_{date_time}.jsonl"
 
@@ -110,7 +111,7 @@ def setup(args):
         trust_remote_code=True,
         gpu_memory_utilization=0.95,
         # enforce_eager=True,
-        max_num_seqs=512,  # 一次最多生成512个序列
+        # max_num_seqs=512,  # 一次最多生成512个序列
         enable_prefix_caching=True,  # 使用前缀缓存
         # enable_chunked_prefill=True,
     )
@@ -225,7 +226,12 @@ def outputs_to_samples(origin_samples_ls, outputs_ls, output_token_ids_ls, args_
 
         # result checking: if any real_output is incorrect, then the sample will be dropped
         correct_ls = [simple_reward_fn(solution_str=res, ground_truth=sample['gt']) for res in real_output]
-        is_correct = True if True in correct_ls else False  # pass@n
+        if args_dict.agg_method == "pass@n":
+            is_correct = True if True in correct_ls else False  # pass@n
+        elif args_dict.agg_method == "avg@n":
+            is_correct = sum(map(int, correct_ls)) / len(correct_ls)
+        else:
+            raise NotImplementedError
         # correct_count += is_correct
 
         sample.pop("prompt")

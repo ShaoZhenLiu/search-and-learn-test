@@ -1,4 +1,6 @@
 from .iterative_generate import iterative_generate
 from .diff_of_n import diff_of_n
 from .diff_of_n_multi_turn import diff_of_n_multi_turn
-from .iterative_generate_multi_trun import iterative_generate_multi_turn
+from .iterative_generate_multi_turn import iterative_generate_multi_turn
+from .multi_turn_with_validate import multi_turn_with_validate
+from .think_twice import think_twice

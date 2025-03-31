@@ -28,9 +28,9 @@ import torch
 
 from sal.config import Config
 from sal.search import beam_search, best_of_n, dvts
-from sal.inference import iterative_generate, diff_of_n, diff_of_n_multi_turn, iterative_generate_multi_trun
+from sal.inference import iterative_generate, diff_of_n, diff_of_n_multi_turn, iterative_generate_multi_turn
 from sal.inference.direct_gen import VLLMServerManager
-from sal.inference.iterative_generate_multi_trun import MultiTurnResponseCollector
+from sal.inference.iterative_generate_multi_turn import MultiTurnResponseCollector
 from sal.utils.data import get_dataset, save_dataset
 from sal.utils.parser import H4ArgumentParser
 from sal.utils.rewards import sal_reward_fn

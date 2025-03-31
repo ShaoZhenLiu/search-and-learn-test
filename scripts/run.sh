@@ -1,18 +1,16 @@
 #!/bin/bash
 set -ex
 
-export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export CUDA_VISIBLE_DEVICES=2,3
+export VLLM_WORKER_MULTIPROC_METHOD=spawn
 
-#VLLM_WORKER_MULTIPROC_METHOD=spawn \
-#    python scripts/test_time_compute.py \
-#        recipes/gemma-2-27b-it/diff_of_n.yaml
+#python scripts/test_time_compute.py \
+#    recipes/val_multi_turn.yaml
 
-VLLM_WORKER_MULTIPROC_METHOD=spawn \
-    python scripts/test_time_compute.py \
-        recipes/iter_gen_multi_turn.yaml \
-        2>&1 | tee inference_multi_turn_16k_32b.log
+#python scripts/test_time_compute.py \
+#    recipes/think2.yaml
 
-#VLLM_WORKER_MULTIPROC_METHOD=spawn \
-#    python scripts/inference_data_collect.py \
-#        recipes/iter_gen_multi_turn.yaml \
-#        2>&1 | tee inference_multi_turn_2.log
+
+python scripts/test_time_compute.py \
+    recipes/iter_gen_multi_turn.yaml \
+    2>&1 | tee inference_multi_turn_1k_7b.log

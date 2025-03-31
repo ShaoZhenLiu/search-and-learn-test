@@ -2,6 +2,8 @@
 
 DEEPSEEK_MATH_SYSTEM_PROMPT = """Let's think step by step and output the final answer within \\boxed{}."""
 
+DEEPSEEK_MATH_SYSTEM_PROMPT2 = """Please reason step by step, and put your final answer within \\boxed{{}}."""
+
 # For Math ORM to verify correctness of LLM's solution. We disable this by default, as it doesn't help much.
 ORM_PROMPT = """You are an expert in verifying if two math answers are the same.
 Your input is a problem and two answers, Answer 1 and Answer 2. You need to check if they are mathematically equivalent.
@@ -392,8 +394,116 @@ DIFF_OF_N_MULTI_TURN_STEP_PROMPTS = {
 
 ITER_GEN_MULTI_TURN_STEP_PROMPTS = {
     "turn0" : "{{ problem }}",
+    "turn1" : """Please propose a new solution method for the **original problem** that is different from the previous approach. 
+               Focus strictly on alternative techniques for solving the **same problem**, and avoid introducing any new scenarios or questions.""",
+    "turn2" : """INTEGRATED ANALYSIS TASK:
+               Execute the following steps using the **original problem from turn0** and **both methods from turn1**:
+               
+               [COMPARISON PHASE]
+               1. Quantitative Contrast:
+                   - Present Method A result: [numeric/symbolic expression]
+                   - Present Method B result: [same precision format]
+                   - Δ = |A - B| (precision ≥3 decimal places)
+               
+               [VALIDATION PHASE] 
+               2. Consistency Proof:
+                   - Algebraic equivalence verification
+                   - Numerical error source analysis
+               
+               [SYNTHESIS OUTPUT]
+               3. Final Unified Answer:
+                   - Cross-verified final result
+                   - Must be output in \\boxed{} format
+               
+               [STRICT CONSTRAINTS]
+               - All analysis must be based on original problem data
+               - No new assumptions/problem generation allowed
+               - Final answer must include \\boxed{}""",
+    # "turn1" : """Please propose a new solution method for the **original problem** that is different from the previous approach.
+    #            Focus strictly on alternative techniques for solving the **same problem**, and avoid introducing any new scenarios or questions.""",
+    # "turn2" : """COMPARISON TASK:
+    #            Using the **exact same problem statement and data** from turn0 and the **second distinct methods** generated in turn1:
+    #            1. Directly compare numerical/analytic results from both methods
+    #            2. Identify any discrepancy with precision level >3 decimal places
+    #            3. Explain consistency/inconsistency using mathematical proofs
+    #            [Avoid introducing any new scenarios or questions]""",
+    # "turn3" : """SYNTHESIS TASK:
+    #            Based strictly on:
+    #            - Original problem from turn0
+    #            - Method A (turn0 first solution)
+    #            - Method B (turn1 second solution)
+    #            - Comparison results (turn2)
+    #            Produce:
+    #            1. Unified solution flowchart
+    #            2. Error analysis table (if discrepancies exist)
+    #            3. Final validity conclusion with confidence level""",
+}
+
+ITER_GEN_MULTI_TURN_STEP_PROMPTS_OLD = {
+    "turn0" : "{{ problem }}",
     "turn1" : "Please propose a new problem-solving approach that is significantly different from the previous solution.",
     "turn2" : "Compare the results of two problem-solving approaches."
               "\nAnalyze whether the results of these two methods are consistent and provide your reasoning.",
     "turn3" : "Refer to the above information to provide a step-by-step analysis and your conclusion.",
+}
+
+VAL_MULTI_TURN_STEP_PROMPTS = {
+    "turn0" : "{{ problem }}",  # 给一个数学问题让他回答
+    "turn1" : """Perform a self-evaluation:
+   - You may include reasoning to verify correctness.
+   - However, your final self-evaluation **must** be in one of the following formats:
+     ```
+     [VERIFY] correct.
+     ```
+     or  
+     ```
+     [VERIFY] wrong.
+     ```""",
+    "turn2" : """Please perform the following steps based on your self-evaluation status:
+    
+    - If your self-evaluation was marked as correct:
+        * Re-examine your solution using an alternative calculation method 
+        * Verify intermediate steps through backward reasoning
+        * Confirm your final answer is consistent with the verification
+        * Maintain the original answer in \\boxed{} if confirmed
+    
+    - If your self-evaluation indicated an error:
+        * Identify the specific mistake in reasoning or calculation
+        * Provide a clear explanation of the error
+        * Revise the reasoning path with corrected steps
+        * Present the corrected final answer within \\boxed{}
+    
+    Ensure your response explicitly addresses either validation confirmation or error correction.""",  # 如果出现 [VERIFY] wrong 就需要重新进行改正
+}
+
+THINK_TWICE_STEP_PROMPT = {
+    "turn0": "{{ problem }}",
+    "turn1":
+"""{{ problem }}
+The assistant’s previous answer is: <answer> {{ answer }} </answer>, and please re-answer.""",
+}
+
+
+SYSTEM_PROMPT_TYPE = {
+    "best_of_n": LLAMA_MATH_SYSTEM_PROMPT,
+    "beam_search": LLAMA_MATH_SYSTEM_PROMPT,
+    "dvts": LLAMA_MATH_SYSTEM_PROMPT,
+    "iter_gen": LLAMA_MATH_SYSTEM_PROMPT_MODIFY,
+    "diff_of_n": LLAMA_MATH_SYSTEM_PROMPT_MODIFY,
+    "iter_gen_multi_turn": DEEPSEEK_MATH_SYSTEM_PROMPT,
+    "diff_of_n_multi_turn": LLAMA_MATH_SYSTEM_PROMPT,
+    "val_multi_turn": DEEPSEEK_MATH_SYSTEM_PROMPT,
+    "think2": DEEPSEEK_MATH_SYSTEM_PROMPT,
+}
+
+STEP_PROMPT_TYPE = {
+    "best_of_n": None,
+    "beam_search": None,
+    "dvts": None,
+    "iter_gen": ITER_GEN_STEP_PROMPTS,
+    "diff_of_n": DIFF_OF_N_STEP_PROMPTS,
+    "iter_gen_multi_turn": ITER_GEN_MULTI_TURN_STEP_PROMPTS,
+    "diff_of_n_multi_turn": DIFF_OF_N_MULTI_TURN_STEP_PROMPTS,
+    "val_multi_turn": VAL_MULTI_TURN_STEP_PROMPTS,
+    "think2": THINK_TWICE_STEP_PROMPT,
 }

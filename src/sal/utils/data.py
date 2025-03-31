@@ -25,6 +25,7 @@ from huggingface_hub import (
 from sal.config import Config
 
 logger = logging.getLogger()
+date_time = time.strftime("%m%d%H%M", time.localtime())
 
 
 def get_dataset(config: Config) -> Dataset:
@@ -72,6 +73,6 @@ def save_dataset(dataset, config, acc=None, file_name=None):
         if config.output_dir is None:
             config.output_dir = f"data/{config.model_path}"
         Path(config.output_dir).mkdir(parents=True, exist_ok=True)
-        target_file = file_name if file_name is not None else f"{config.output_dir}/bon_completions_s{config.dataset_start}_e{config.dataset_end}_acc{acc}.jsonl"
+        target_file = file_name if file_name is not None else f"{config.output_dir}/bon_completions_s{config.dataset_start}_e{config.dataset_end}_acc{acc}_{date_time}.jsonl"
         dataset.to_json(target_file, lines=True)
         logger.info(f"Saved completions to {target_file}")
