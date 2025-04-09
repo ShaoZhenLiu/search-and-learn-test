@@ -72,9 +72,9 @@ def format_data_7b(example):
 
 def classify_answers(ans1, ans2, gt_ans):
     ans1_correct, ans2_correct = _sal_reward_fn(ans1, gt_ans), _sal_reward_fn(ans2, gt_ans)
-    ans1_correct = "correct" if ans1_correct == True else "error"
-    ans2_correct = "correct" if ans2_correct == True else "error"
-    return f"{ans1_correct}_{ans2_correct}"
+    # ans1_correct = "correct" if ans1_correct == True else "error"
+    # ans2_correct = "correct" if ans2_correct == True else "error"
+    return f"{ans1_correct}-to-{ans2_correct}"
 
 def format_error_correct(error_resp, eval_resp, correct_resp):
     return (
@@ -102,12 +102,14 @@ def format_message_from_multi_turn(example):
     # problems = example["problem"] if example.get("problem", None) is not None else example["question"]
     # system_prompt = example["messages"][0][0]["content"]
 
-    assistant_content_ls = []
-    for message, correct_type in zip(example["messages"], example["correct_turn_ls"]):
+    assistant_content_ls, correct_type_ls = [], []
+    for msg in example["messages"]:
 
-        ans_turn1 = message[2]["content"]
-        eval_turn = message[6]["content"]
-        ans_turn2 = message[4]["content"]
+        ans_turn1 = msg[2]["content"]
+        eval_turn = msg[6]["content"]
+        ans_turn2 = msg[4]["content"]
+
+        correct_type = classify_answers(ans_turn1, ans_turn2, gt_ans=answer)
 
         global c_c, c_e, e_e, e_c
         if correct_type == "False-to-True":  # 关键
@@ -130,15 +132,17 @@ def format_message_from_multi_turn(example):
             raise NotImplementedError
 
         assistant_content_ls.append(assistant_content)
+        correct_type_ls.append(correct_type)
 
     return {
-        "multi_turn_message": assistant_content_ls
+        "multi_turn_message": assistant_content_ls,
+        "correct_turn_ls": correct_type_ls,
     }
 
 if __name__ == '__main__':
     # 加载数据集
-    dataset_path = "/data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-1k-val"
-    data_file_name = "bon_completions_s0_e1000_accNone_04031127.jsonl"
+    dataset_path = "/data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-7b-sft_data"
+    data_file_name = "merged.jsonl"
     dataset = load_dataset(dataset_path, data_files=data_file_name, split='train')
     print(dataset)
     c_c, c_e, e_e, e_c = 0, 0, 0, 0
@@ -148,7 +152,7 @@ if __name__ == '__main__':
         desc="generate training example",
         load_from_cache_file=False,
     )
-    dataset = dataset.filter(lambda x: len(x["multi_turn_message"]) != 0)
+    # dataset = dataset.filter(lambda x: len(x["multi_turn_message"]) != 0)
     print(dataset)
     print("correct to correct:", c_c)
     print("correct to error:", c_e)
@@ -157,15 +161,15 @@ if __name__ == '__main__':
     dataset = dataset.map(
         format_data_7b,
         batched=False,
-        desc="generate training example",
+        desc="format data",
         load_from_cache_file=False,
     )
 
     # dataset.to_json(f"{dataset_path}/{data_file_name}")
     list_dict = []
     for example in dataset:
-        for message, correct_turn, eval_turn in zip(example['new_messages'], example['correct_turn_ls'], example["evaluate_turn_ls"]):
-            if correct_turn == "False-to-False" or not eval_turn:
+        for message, correct_turn in zip(example['new_messages'], example['correct_turn_ls']):
+            if correct_turn == "False-to-False":
                 continue
             list_dict.append({
                 'messages': message,
@@ -177,12 +181,14 @@ if __name__ == '__main__':
     false_to_true = [d for d in list_dict if d['correct_turn'] == 'False-to-True']
     other_data = [d for d in list_dict if d['correct_turn'] == 'True-to-False']
 
-    min_count = min(len(true_to_true), len(false_to_true))
+    # False-to-True 和 True-to-False + True-to-True 一样多，
+    min_count = min(len(true_to_true), len(false_to_true)) // 2
     random.seed(0)
     sampled_true_to_true = random.sample(true_to_true, min_count)
+    sampled_true_single = random.sample(other_data, min_count)
 
-    print(len(sampled_true_to_true), len(false_to_true), len(other_data))
-    filtered_list = sampled_true_to_true + false_to_true + other_data
+    print(len(sampled_true_to_true), len(false_to_true), len(sampled_true_single))
+    filtered_list = sampled_true_to_true + false_to_true + sampled_true_single
     filtered_list = [{'messages': d['messages']} for d in filtered_list]
     random.shuffle(filtered_list)
 
