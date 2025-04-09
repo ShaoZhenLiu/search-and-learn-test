@@ -78,7 +78,7 @@ def main():
         tensor_parallel_size=num_gpus,
         # max_num_seqs=1024,  # 一次最多生成512个序列
     )
-    prm = None if config.approach in ["iter_gen", "diff_of_n", "iter_gen_multi_turn", "diff_of_n_multi_turn", "val_multi_turn", "think2"] else load_prm(config)
+    # prm = None if config.approach in ["iter_gen", "diff_of_n", "iter_gen_multi_turn", "diff_of_n_multi_turn", "val_multi_turn", "think2"] else load_prm(config)
 
     dataset = get_dataset(config)
 
@@ -92,9 +92,10 @@ def main():
         approach_fn,
         batched=True,
         batch_size=config.search_batch_size,
-        fn_kwargs={"config": config, "llm": llm} if config.approach in \
-                                                    ["iter_gen", "diff_of_n", "iter_gen_multi_turn", "diff_of_n_multi_turn", "val_multi_turn", "think2"] \
-                                                 else {"config": config, "llm": llm, "prm": prm},
+        fn_kwargs={"config": config, "llm": llm},
+        # fn_kwargs={"config": config, "llm": llm} if config.approach in \
+        #                                             ["iter_gen", "diff_of_n", "iter_gen_multi_turn", "diff_of_n_multi_turn", "val_multi_turn", "think2"] \
+        #                                          else {"config": config, "llm": llm, "prm": prm},
         desc="Running search",
         load_from_cache_file=False,
     )

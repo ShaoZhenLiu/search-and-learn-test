@@ -103,19 +103,26 @@ def add_correct(example, turn_idx=2, correct_tag="correct"):
                 enable_llm=False, check_think=False,
             )
     else:
-        if len(example["pred_cot"]) > 1:
-            correct_ls = [
-                _sal_reward_fn(
-                    solution_str=pc,  # 最后一个回答会输出在\boxed{}中的答案
+        if example.get("pred_cot", None) is not None:
+            if len(example["pred_cot"]) > 1:
+                correct_ls = [
+                    _sal_reward_fn(
+                        solution_str=pc,  # 最后一个回答会输出在\boxed{}中的答案
+                        ground_truth=example["gt"],
+                        enable_llm=False, check_think=False,
+                    )
+                    for pc in example["pred_cot"]
+                ]
+                correctness = sum(map(int, correct_ls)) / len(correct_ls)
+            else:
+                correctness = _sal_reward_fn(
+                    solution_str=example["pred_cot"],
                     ground_truth=example["gt"],
                     enable_llm=False, check_think=False,
                 )
-                for pc in example["pred_cot"]
-            ]
-            correctness = sum(map(int, correct_ls)) / len(correct_ls)
         else:
             correctness = _sal_reward_fn(
-                solution_str=example["pred_cot"],
+                solution_str=example["code"][0],
                 ground_truth=example["gt"],
                 enable_llm=False, check_think=False,
             )
@@ -143,20 +150,88 @@ def calculate_correct_turn(dataset, turn_idx_ls):
         acc = sum(dataset[tag]) / len(dataset) * 100
         print(f"acc for turn {turn_id}: {acc}%")
     # 对数据进行过滤，过滤出turn2和turn4正确，但是turn-1错误的数据
-    new_dataset = dataset.filter(lambda x: x["correct_turn2"] == True and x["correct_turn4"] == False and x["correct_turn-1"] == True)
+    new_dataset = dataset.filter(lambda x: x["correct_turn2"] == 0 and x["correct_turn-1"] > 0)
     print(len(new_dataset))
     print(new_dataset["idx"])
     return
 
-if __name__ == '__main__':
-    # 加载数据集
-    dataset_path = "/data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-1k-7b"
-    data_file_name = "bon_completions_s0_e1000_accNone_03301852.jsonl"
+def add_correct_sft_dataset_val_data(example):
+    split_words = "Wait, but let me think again."
+    pred_cot_ls = example["code"][0].split(split_words)
+    if len(pred_cot_ls) == 1:
+        pred_cot_ls.append("")
+    example["messages"] = [
+        {
+            "content": pred_cot_ls[0],
+            "role": "assistant",
+        },
+        {
+            "content": pred_cot_ls[1],
+            "role": "assistant",
+        }
+    ]
+    return {
+        "correct_turn0": add_correct(example, turn_idx=0)["correct"],
+        "correct_turn1": add_correct(example, turn_idx=1)["correct"],
+    }
+
+def map_sft_val_data(dataset):
+    dataset = dataset.map(add_correct_sft_dataset_val_data, load_from_cache_file=False)
+    new_dataset = dataset.filter(lambda x: len(x["code"][0].split("Wait, but let me think again.")) == 1)
+    print(len(new_dataset))
+    print(new_dataset["idx"])
+    print(len(dataset.filter(lambda x: x["correct_turn0"] == x["correct_turn1"])))
+    new_dataset = dataset.filter(lambda x: x["correct_turn0"] == True and x["correct_turn1"] == False)
+    print(len(new_dataset))
+    print(new_dataset["idx"])
+
+def compare_ori_and_sft():
+    dataset_path = "/data/shaozhen.liu/python_project/Qwen2.5-Math/evaluation/outputs/data/shaozhen.liu/python_project/hf_models/sft_models/Qwen2.5-7B-Instruct-main/math_eval/math_500/"
+    data_file_name = "test_qwen25-math-cot_-1_seed0_t0.6_s0_e-1.jsonl"
     dataset = load_dataset(dataset_path, data_files=data_file_name, split='train')
     print(dataset)
-    print(dataset["correct"][0])
+    # print(dataset["correct"][0])
 
-    calculate_correct_turn(dataset, [2, 4, -1])
+    dataset = dataset.map(
+        add_correct,
+        batched=False,
+        desc="add correct label",
+        load_from_cache_file=False,
+    )
+    correct_ls_sft = dataset["correct"]
+
+    dataset_path = "/data/shaozhen.liu/python_project/Qwen2.5-Math/evaluation/outputs/data/shaozhen.liu/python_project/hf_models/Qwen2.5-7B-Instruct/math_eval/math_500/"
+    data_file_name = "test_qwen25-math-cot_-1_seed0_t0.6_s0_e-1.jsonl"
+    dataset = load_dataset(dataset_path, data_files=data_file_name, split='train')
+    print(dataset)
+    # print(dataset["correct"][0])
+
+    dataset = dataset.map(
+        add_correct,
+        batched=False,
+        desc="add correct label",
+        load_from_cache_file=False,
+    )
+    correct_ls_ori = dataset["correct"]
+
+    oriTure_sftFalse = []
+    sftTure_oriFalse = []
+    for i, (c_sft, c_ori) in enumerate(zip(correct_ls_sft, correct_ls_ori)):
+        if c_ori == True and c_sft == False:
+            oriTure_sftFalse.append(i)
+        elif c_sft == True and c_ori == False:
+            sftTure_oriFalse.append(i)
+    print(oriTure_sftFalse)
+    print(sftTure_oriFalse)
+
+if __name__ == '__main__':
+    # 加载数据集
+    dataset_path = "/data/shaozhen.liu/python_project/Qwen2.5-Math/evaluation/outputs/data/shaozhen.liu/python_project/hf_models/sft_models/Qwen2.5-7B-Instruct-main/math_eval/math_500/"
+    data_file_name = "test_qwen25-math-cot_-1_seed0_t0.6_s0_e-1.jsonl"
+    dataset = load_dataset(dataset_path, data_files=data_file_name, split='train')
+    print(dataset)
+
+    map_sft_val_data(dataset)
 
     # dataset.to_json(f"{dataset_path}/{data_file_name}")
 

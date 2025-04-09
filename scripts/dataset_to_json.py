@@ -1,4 +1,5 @@
 import json
+import random
 from datasets import load_dataset
 
 from sal.utils.rewards.math_reward import _sal_reward_fn
@@ -54,15 +55,18 @@ def format_data_7b(example):
     system_prompt = example["messages"][0][0]["content"]
     problems = example["problem"] if example.get("problem", None) is not None else example["question"]
 
-    # 构造对话格式
-    messages = [
-        {"role": "system", "content": f"{system_prompt}"},
-        {"role": "user", "content": f"{problems}"},
-        {"role": "assistant", "content": f"{example["multi_turn_message"]}"},
-    ]
+    messages_ls = []
+    for multi_turn_mess in example["multi_turn_message"]:
+        # 构造对话格式
+        messages = [
+            {"role": "system", "content": f"{system_prompt}"},
+            {"role": "user", "content": f"{problems}"},
+            {"role": "assistant", "content": f"{multi_turn_mess}"},
+        ]
+        messages_ls.append(messages)
 
     return {
-        "new_messages": messages,
+        "new_messages": messages_ls,
     }
 
 
@@ -72,62 +76,69 @@ def classify_answers(ans1, ans2, gt_ans):
     ans2_correct = "correct" if ans2_correct == True else "error"
     return f"{ans1_correct}_{ans2_correct}"
 
-def format_error_correct(error_resp, correct_resp):
+def format_error_correct(error_resp, eval_resp, correct_resp):
     return (
-        f"{error_resp}\n"
-        f"Wait, but let me think again.\n"
+        f"{error_resp}\n\n"
+        f"{eval_resp}\n\n"
         f"{correct_resp}"
     )
 
-def format_correct_correct(resp1, resp2):
+def format_correct_correct(resp1, eval_resp, resp2):
     return (
-        f"{resp1}\n"
-        f"Wait, but let me think again.\n"
+        f"{resp1}\n\n"
+        f"{eval_resp}\n\n"
         f"{resp2}"
     )
 
-def format_correct_error(resp1, resp2):
-    return resp1
+def format_correct_error(resp1, eval_resp):
+    return (
+        f"{resp1}\n\n"
+        f"{eval_resp}\n\n"
+    )
 
 
 def format_message_from_multi_turn(example):
     answer = example["answer"] if example.get("answer", None) is not None else example["gt"]
     # problems = example["problem"] if example.get("problem", None) is not None else example["question"]
     # system_prompt = example["messages"][0][0]["content"]
-    ans_turn1 = example["messages"][0][2]["content"]
-    ans_turn2 = example["messages"][0][4]["content"]
 
-    case_type = classify_answers(ans_turn1, ans_turn2, answer)
+    assistant_content_ls = []
+    for message, correct_type in zip(example["messages"], example["correct_turn_ls"]):
 
-    # 根据类型处理内容
-    global c_c, c_e, e_e, e_c
-    if case_type == "error_correct":  # 关键
-        assistant_content = format_error_correct(ans_turn1, ans_turn2)
-        e_c += 1
+        ans_turn1 = message[2]["content"]
+        eval_turn = message[6]["content"]
+        ans_turn2 = message[4]["content"]
 
-    elif case_type == "correct_correct":  # 补充
-        assistant_content = format_correct_correct(ans_turn1, ans_turn2)
-        c_c += 1
+        global c_c, c_e, e_e, e_c
+        if correct_type == "False-to-True":  # 关键
+            assistant_content = format_error_correct(ans_turn1, eval_turn, ans_turn2)
+            e_c += 1
 
-    elif case_type == "correct_error":  # 补充
-        assistant_content = format_correct_error(ans_turn1, ans_turn2)
-        c_e += 1
+        elif correct_type == "True-to-True":  # 补充
+            assistant_content = format_correct_correct(ans_turn1, eval_turn, ans_turn2)
+            c_c += 1
 
-    elif case_type == "error_error":
-        assistant_content = None
-        e_e += 1
+        elif correct_type == "True-to-False":  # 补充
+            assistant_content = format_correct_error(ans_turn1, eval_turn)
+            c_e += 1
 
-    else:
-        raise NotImplementedError("出现了非法的故障")
+        elif correct_type == "False-to-False":
+            assistant_content = None
+            e_e += 1
+
+        else:
+            raise NotImplementedError
+
+        assistant_content_ls.append(assistant_content)
 
     return {
-        "multi_turn_message": assistant_content
+        "multi_turn_message": assistant_content_ls
     }
 
 if __name__ == '__main__':
     # 加载数据集
-    dataset_path = "/data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-1k-7b"
-    data_file_name = "bon_completions_s0_e1000_accNone_03301852.jsonl"
+    dataset_path = "/data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-1k-val"
+    data_file_name = "bon_completions_s0_e1000_accNone_04031127.jsonl"
     dataset = load_dataset(dataset_path, data_files=data_file_name, split='train')
     print(dataset)
     c_c, c_e, e_e, e_c = 0, 0, 0, 0
@@ -137,7 +148,7 @@ if __name__ == '__main__':
         desc="generate training example",
         load_from_cache_file=False,
     )
-    dataset = dataset.filter(lambda x: x["multi_turn_message"] is not None)
+    dataset = dataset.filter(lambda x: len(x["multi_turn_message"]) != 0)
     print(dataset)
     print("correct to correct:", c_c)
     print("correct to error:", c_e)
@@ -151,12 +162,31 @@ if __name__ == '__main__':
     )
 
     # dataset.to_json(f"{dataset_path}/{data_file_name}")
-    # 转换为列表字典
     list_dict = []
     for example in dataset:
-        list_dict.append({'messages': example['new_messages']})
+        for message, correct_turn, eval_turn in zip(example['new_messages'], example['correct_turn_ls'], example["evaluate_turn_ls"]):
+            if correct_turn == "False-to-False" or not eval_turn:
+                continue
+            list_dict.append({
+                'messages': message,
+                'correct_turn': correct_turn,
+            })
+
+    # 分离 True-to-True 和 False-to-True 的数据
+    true_to_true = [d for d in list_dict if d['correct_turn'] == 'True-to-True']
+    false_to_true = [d for d in list_dict if d['correct_turn'] == 'False-to-True']
+    other_data = [d for d in list_dict if d['correct_turn'] == 'True-to-False']
+
+    min_count = min(len(true_to_true), len(false_to_true))
+    random.seed(0)
+    sampled_true_to_true = random.sample(true_to_true, min_count)
+
+    print(len(sampled_true_to_true), len(false_to_true), len(other_data))
+    filtered_list = sampled_true_to_true + false_to_true + other_data
+    filtered_list = [{'messages': d['messages']} for d in filtered_list]
+    random.shuffle(filtered_list)
 
     # 保存为 JSON 文件
     with open(f"{dataset_path}/llama-factory-sft-format.json", "w", encoding="utf-8") as f:
-        json.dump(list_dict, f, ensure_ascii=False, indent=2)
+        json.dump(filtered_list, f, ensure_ascii=False, indent=2)
 

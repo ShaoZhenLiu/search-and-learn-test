@@ -2,7 +2,7 @@
 
 DEEPSEEK_MATH_SYSTEM_PROMPT = """Let's think step by step and output the final answer within \\boxed{}."""
 
-DEEPSEEK_MATH_SYSTEM_PROMPT2 = """Please reason step by step, and put your final answer within \\boxed{{}}."""
+DEEPSEEK_MATH_SYSTEM_PROMPT2 = """Please reason step by step, and put your final answer within \\boxed{}."""
 
 # For Math ORM to verify correctness of LLM's solution. We disable this by default, as it doesn't help much.
 ORM_PROMPT = """You are an expert in verifying if two math answers are the same.
@@ -393,6 +393,32 @@ DIFF_OF_N_MULTI_TURN_STEP_PROMPTS = {
 }
 
 ITER_GEN_MULTI_TURN_STEP_PROMPTS = {
+    "turn0" : "{{ problem }} Let's think step by step and output the final answer within \\boxed{}.",
+    "turn1" : """{% if correctness %}
+3. Since your initial response is self-evaluated as correct, confirm it and provide no further modifications. Put your final answer within \\boxed{}.
+{% else %}
+3. Since your initial response is self-evaluated as incorrect, there might be an error in the solution above because of lack of understanding of the question. Please correct the error, if any, and rewrite the solution. Put your final answer within \\boxed{}.
+{% endif %}
+Focus strictly on alternative techniques for solving the **same problem**, and avoid introducing any new scenarios or questions.""",
+    "turn2" : """Generate a concise transitional paragraph that naturally connects two consecutive problem-solving attempts. The text should:
+1. Begin with a brief re-evaluation of the first solution's approach
+2. Identify potential weaknesses or alternative perspectives using phrases like 
+\"Wait, let's verify...\" or \"Alternatively, considering...\"
+3. Maintain mathematical rigor while using conversational connectors like 
+\"However...\", \"But perhaps...\", or "On second thought...\"
+4. Flow seamlessly into introducing the improved approach
+5. Keep technical terminology consistent with the problem domain
+
+Avoid:
+- Direct negation of the first solution
+- Repetition of full calculations
+- Abrupt topic shifts
+
+Example transition for [algebra problem]:
+\"Hold on, while the substitution method works in principle, the decimal coefficients might lead to calculation errors. Perhaps applying elimination first to remove one variable would simplify the system before substituting values. Let's try reorganizing the steps...\" """
+}
+
+ITER_GEN_MULTI_TURN_STEP_PROMPTS_OLD2 = {
     "turn0" : "{{ problem }}",
     "turn1" : """Please propose a new solution method for the **original problem** that is different from the previous approach. 
                Focus strictly on alternative techniques for solving the **same problem**, and avoid introducing any new scenarios or questions.""",
@@ -447,7 +473,32 @@ ITER_GEN_MULTI_TURN_STEP_PROMPTS_OLD = {
     "turn3" : "Refer to the above information to provide a step-by-step analysis and your conclusion.",
 }
 
+VAL_MULTI_TURN_SYSTEM_PROMPTS = """You are a mathematical reasoning assistant. For each problem, follow these steps strictly:
+
+1. Solve the problem using step-by-step reasoning and output the final answer within \\boxed{}.
+
+Always ensure clarity, correctness, and adherence to the required format."""
+
 VAL_MULTI_TURN_STEP_PROMPTS = {
+    "turn0" : "{{ problem }} Let's think step by step and output the final answer within \\boxed{}.",
+    "turn1" : """{% if correctness %}
+3. Since your initial response is self-evaluated as correct, confirm it and provide no further modifications. Put your final answer within \\boxed{}.
+{% else %}
+3. Since your initial response is self-evaluated as incorrect, there might be an error in the solution above because of lack of understanding of the question. Please correct the error, if any, and rewrite the solution. Put your final answer within \\boxed{}.
+{% endif %}""",
+    "turn2" : """2. Perform a self-evaluation:
+   - You may include reasoning to verify correctness.
+   - However, your final self-evaluation **must** be in one of the following formats:
+     ```
+     [VERIFY] correct.
+     ```
+     or  
+     ```
+     [VERIFY] wrong.
+     ```"""
+}
+
+VAL_MULTI_TURN_STEP_PROMPTS_OLD = {
     "turn0" : "{{ problem }}",  # 给一个数学问题让他回答
     "turn1" : """Perform a self-evaluation:
    - You may include reasoning to verify correctness.

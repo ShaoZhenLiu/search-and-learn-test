@@ -69,7 +69,10 @@ def vllm_generate(convs_ls, config: Config, llm: LLM):
     return responses, outputs, output_token_ids_ls
 
 
-def _multi_turn_with_validate(batch_of_prompts, answers, config: Config, llm: LLM) -> dict:
+def _query_middle_step(batch_of_prompts, answers, examples, config: Config, llm: LLM) -> dict:
+    """
+    通过结合之前模型的两次回答，来得到一个中间结果和最终结果
+    """
     convs = [
         [
             {"role": "system", "content": config.system_prompt},
@@ -88,6 +91,7 @@ def _multi_turn_with_validate(batch_of_prompts, answers, config: Config, llm: LL
                 *conv,
                 {"role": "assistant", "content": output},
                 {"role": "user", "content": Template(config.step_prompt[f"turn{prompt_index}"]).render(
+                    # correctness=True if "[VERIFY] correct" in output else False
                     correctness=_sal_reward_fn(
                         solution_str=output,
                         ground_truth=answers[conv_index // config.n],
@@ -99,30 +103,16 @@ def _multi_turn_with_validate(batch_of_prompts, answers, config: Config, llm: LL
         ]
         return new_convs
 
-    # for i in range(1, 3):
-    #     convs = generate_convs(convs, prompt_index=i)
-    convs = generate_convs(convs, prompt_index=1)
-
-    convs_for_system_user_assistant = convs[:-1]
-    convs_for_system_user_assistant = [
-        [
-            *conv,
-            {"role": "user", "content": config.step_prompt[f"turn2"]},
-        ]
-        for conv_index, (conv) in enumerate(convs)
-    ]
-    responses, outputs_ls_for_eval, output_token_ls_for_eval = vllm_generate(convs_for_system_user_assistant, config, llm)
+    for i in range(1, 2):
+        convs = generate_convs(convs, prompt_index=i)
     responses, outputs_ls, output_token_ls = vllm_generate(convs, config, llm)  # 得到最终的答案
     token_len_ls.append(output_token_ls)
-    token_len_ls.append(output_token_ls_for_eval)
     final_convs = [
         [
             *conv,
             {"role": "assistant", "content": output},
-            {"role": "user", "content": config.step_prompt[f"turn2"]},
-            {"role": "assistant", "content": output_eval},
         ]
-        for conv_index, (conv, output, output_eval) in enumerate(zip(convs, outputs_ls, outputs_ls_for_eval))
+        for conv_index, (conv, output) in enumerate(zip(convs, outputs_ls))
     ]
 
     # 将token_len的形状从 [4, batch] 变成 [batch, 4]
@@ -146,13 +136,13 @@ def _multi_turn_with_validate(batch_of_prompts, answers, config: Config, llm: LL
 
 
 
-def multi_turn_with_validate(examples, config: Config, llm: LLM):
+def query_middle_step(examples, config: Config, llm: LLM):
     """
     examples: 根据 config.search_batch_size 调整里面的个数，默认为25
     """
     problems = examples["problem"] if examples.get("problem", None) is not None else examples["question"]
     answers = examples["answer"] if examples.get("answer", None) is not None else examples["gt"]
-    step_result = _multi_turn_with_validate(problems, answers, config, llm)
+    step_result = _query_middle_step(problems, answers, examples, config, llm)
 
     if config.calculate_correct:
         correct_ls = [

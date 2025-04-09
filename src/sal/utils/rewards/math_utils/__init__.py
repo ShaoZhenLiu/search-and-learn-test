@@ -3,9 +3,12 @@ This module provides utility functions for grading mathematical answers and extr
 """
 
 from .utils import extract_answer, grade_answer_sympy, grade_answer_mathd
+from .inference_dataset_utils import parse_ground_truth, parse_question
 
 __all__ = [
     "extract_answer",
     "grade_answer_sympy",
-    "grade_answer_mathd"
+    "grade_answer_mathd",
+    "parse_ground_truth",
+    "parse_question"
 ]

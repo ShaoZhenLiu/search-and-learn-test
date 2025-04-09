@@ -13,7 +13,7 @@ top_p: 0.95
 max_tokens: 8192
 
 # 16k
-model_path: /data/shaozhen.liu/python_project/hf_models/Qwen2.5-32B-Instruct/
+model_path: /data/shaozhen.liu/python_project/hf_models/Qwen2.5-7B-Instruct/
 dataset_name: /data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-distilled-32b/
 dataset_files: train-distilled_subset16k.jsonl
 output_dir: /data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-1k-val
