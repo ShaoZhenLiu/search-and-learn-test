@@ -76,24 +76,27 @@ def classify_answers(ans1, ans2, gt_ans):
     # ans2_correct = "correct" if ans2_correct == True else "error"
     return f"{ans1_correct}-to-{ans2_correct}"
 
-def format_error_correct(error_resp, eval_resp, correct_resp):
+def format_error_correct(error_resp, eval_resp, correct_resp, conc_resp):
     return (
         f"{error_resp}\n\n"
         f"{eval_resp}\n\n"
-        f"{correct_resp}"
+        f"{correct_resp}\n\n"
+        f"{conc_resp}"
     )
 
-def format_correct_correct(resp1, eval_resp, resp2):
+def format_correct_correct(resp1, eval_resp, resp2, conc_resp):
+    if resp2[:6] == "\\boxed" or len(resp2) < 20:
+        return f"{resp1}"
     return (
         f"{resp1}\n\n"
         f"{eval_resp}\n\n"
-        f"{resp2}"
+        f"{resp2}\n\n"
+        f"{conc_resp}"
     )
 
 def format_correct_error(resp1, eval_resp):
     return (
-        f"{resp1}\n\n"
-        f"{eval_resp}\n\n"
+        f"{resp1}"
     )
 
 
@@ -108,16 +111,17 @@ def format_message_from_multi_turn(example):
         ans_turn1 = msg[2]["content"]
         eval_turn = msg[6]["content"]
         ans_turn2 = msg[4]["content"]
+        conc_turn = msg[8]["content"]
 
         correct_type = classify_answers(ans_turn1, ans_turn2, gt_ans=answer)
 
         global c_c, c_e, e_e, e_c
         if correct_type == "False-to-True":  # 关键
-            assistant_content = format_error_correct(ans_turn1, eval_turn, ans_turn2)
+            assistant_content = format_error_correct(ans_turn1, eval_turn, ans_turn2, conc_turn)
             e_c += 1
 
         elif correct_type == "True-to-True":  # 补充
-            assistant_content = format_correct_correct(ans_turn1, eval_turn, ans_turn2)
+            assistant_content = format_correct_correct(ans_turn1, eval_turn, ans_turn2, conc_turn)
             c_c += 1
 
         elif correct_type == "True-to-False":  # 补充
@@ -139,10 +143,10 @@ def format_message_from_multi_turn(example):
         "correct_turn_ls": correct_type_ls,
     }
 
-if __name__ == '__main__':
+def sft_data_for_mid_fin_gen():
     # 加载数据集
-    dataset_path = "/data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-7b-sft_data"
-    data_file_name = "merged.jsonl"
+    dataset_path = "/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data/DeepScaler-QwQ_32b/mid_fin_gen"
+    data_file_name = "bon_completions_s0_e10000_accNone_04101519.jsonl"
     dataset = load_dataset(dataset_path, data_files=data_file_name, split='train')
     print(dataset)
     c_c, c_e, e_e, e_c = 0, 0, 0, 0
@@ -184,8 +188,66 @@ if __name__ == '__main__':
     # False-to-True 和 True-to-False + True-to-True 一样多，
     min_count = min(len(true_to_true), len(false_to_true)) // 2
     random.seed(0)
-    sampled_true_to_true = random.sample(true_to_true, min_count)
-    sampled_true_single = random.sample(other_data, min_count)
+    sampled_true_single = random.sample(true_to_false, min(len(true_to_false), len(false_to_true) // 2))
+    sampled_true_to_true = random.sample(true_to_true, max(len(false_to_true) // 2, len(false_to_true) - len(true_to_false)))
+
+    print(len(sampled_true_to_true), len(false_to_true), len(sampled_true_single))
+    filtered_list = sampled_true_to_true + false_to_true + sampled_true_single
+    filtered_list = [{'messages': d['messages']} for d in filtered_list]
+    random.shuffle(filtered_list)
+
+    # 保存为 JSON 文件
+    with open(f"{dataset_path}/llama-factory-sft-format.json", "w", encoding="utf-8") as f:
+        json.dump(filtered_list, f, ensure_ascii=False, indent=2)
+
+
+if __name__ == '__main__':
+    # 加载数据集
+    dataset_path = "/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data/DeepScaler-QwQ_32b/mid_fin_gen"
+    data_file_name = "bon_completions_s0_e10000_acc73.42999999999999_04101519.jsonl"
+    dataset = load_dataset(dataset_path, data_files=data_file_name, split='train')
+    print(dataset)
+    c_c, c_e, e_e, e_c = 0, 0, 0, 0
+    dataset = dataset.map(
+        format_message_from_multi_turn,
+        batched=False,
+        desc="generate training example",
+        load_from_cache_file=False,
+    )
+    # dataset = dataset.filter(lambda x: len(x["multi_turn_message"]) != 0)
+    print(dataset)
+    print("correct to correct:", c_c)
+    print("correct to error:", c_e)
+    print("error to correct:", e_c)
+    print("error to error:", e_e)
+    dataset = dataset.map(
+        format_data_7b,
+        batched=False,
+        desc="format data",
+        load_from_cache_file=False,
+    )
+
+    # dataset.to_json(f"{dataset_path}/{data_file_name}")
+    list_dict = []
+    for example in dataset:
+        for message, correct_turn in zip(example['new_messages'], example['correct_turn_ls']):
+            if correct_turn == "False-to-False":
+                continue
+            list_dict.append({
+                'messages': message,
+                'correct_turn': correct_turn,
+            })
+
+    # 分离 True-to-True 和 False-to-True 的数据
+    true_to_true = [d for d in list_dict if d['correct_turn'] == 'True-to-True']
+    false_to_true = [d for d in list_dict if d['correct_turn'] == 'False-to-True']
+    true_to_false = [d for d in list_dict if d['correct_turn'] == 'True-to-False']
+
+    # False-to-True 和 True-to-False + True-to-True 一样多，
+    min_count = len(false_to_true)
+    random.seed(0)
+    sampled_true_single = random.sample(true_to_false, min(len(true_to_false), len(false_to_true) // 2))
+    sampled_true_to_true = random.sample(true_to_true, max(len(false_to_true) // 2, len(false_to_true) - len(true_to_false)))
 
     print(len(sampled_true_to_true), len(false_to_true), len(sampled_true_single))
     filtered_list = sampled_true_to_true + false_to_true + sampled_true_single

@@ -27,10 +27,10 @@ from sal.utils.hub import get_dataset_revisions
 class Config:
     approach: Literal[
         "best_of_n", "beam_search", "dvts", "iter_gen", "diff_of_n", "diff_of_n_multi_turn", "iter_gen_multi_turn",
-        "val_multi_turn", "think2"
+        "val_multi_turn", "think2", "mid_fin_gen"
     ] = "val_multi_turn"
     model_path: str = "/data/shaozhen.liu/python_project/hf_models/gemma-2-27b-it/"
-    gpu_memory_utilization: float = 0.95
+    gpu_memory_utilization: float = 0.9
     prm_path: str = "/data/shaozhen.liu/python_project/hf_models/Llama3.1-8B-PRM-Deepseek-Data"
     use_vllm_server: bool = True  # 是否使用 `vllm serve` 命令初始化一个服务端进行推理
     api_token: str = None  # 创建服务器后进行校验
@@ -85,10 +85,9 @@ class Config:
     reg_for_number = regex.compile(r"\d+")
 
     def __post_init__(self):
-        if self.approach in ["iter_gen", "diff_of_n", "iter_gen_multi_turn", "diff_of_n_multi_turn", "val_multi_turn", "think2"]:
-            from sal.utils.prompts import SYSTEM_PROMPT_TYPE, STEP_PROMPT_TYPE
-            self.system_prompt = SYSTEM_PROMPT_TYPE[self.approach]
-            self.step_prompt = STEP_PROMPT_TYPE[self.approach]
+        from sal.utils.prompts import SYSTEM_PROMPT_TYPE, STEP_PROMPT_TYPE
+        self.system_prompt = SYSTEM_PROMPT_TYPE.get(self.approach, None)
+        self.step_prompt = STEP_PROMPT_TYPE.get(self.approach, None)
 
         if self.approach == "dvts":
             if self.n % self.beam_width != 0:

@@ -30,6 +30,7 @@ from sal.inference import (
     iterative_generate_multi_turn,
     multi_turn_with_validate,
     think_twice,
+    middle_final_generate,
 )
 from sal.inference.direct_gen import VLLMServerManager
 from sal.utils.data import get_dataset, save_dataset
@@ -53,6 +54,7 @@ APPROACHES = {
     "diff_of_n_multi_turn": diff_of_n_multi_turn,
     "val_multi_turn": multi_turn_with_validate,
     "think2": think_twice,
+    "mid_fin_gen": middle_final_generate,
 }
 
 

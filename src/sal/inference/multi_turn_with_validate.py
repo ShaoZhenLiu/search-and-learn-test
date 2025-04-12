@@ -103,11 +103,11 @@ def _multi_turn_with_validate(batch_of_prompts, answers, config: Config, llm: LL
     #     convs = generate_convs(convs, prompt_index=i)
     convs = generate_convs(convs, prompt_index=1)
 
-    convs_for_system_user_assistant = convs[:-1]
+    # convs_for_system_user_assistant = convs[:-1]
     convs_for_system_user_assistant = [
         [
-            *conv,
-            {"role": "user", "content": config.step_prompt[f"turn2"]},
+            *(conv[:-1]),
+            {"role": "user", "content": config.step_prompt["turn2"]},
         ]
         for conv_index, (conv) in enumerate(convs)
     ]
@@ -119,7 +119,7 @@ def _multi_turn_with_validate(batch_of_prompts, answers, config: Config, llm: LL
         [
             *conv,
             {"role": "assistant", "content": output},
-            {"role": "user", "content": config.step_prompt[f"turn2"]},
+            {"role": "user", "content": config.step_prompt["turn2"]},
             {"role": "assistant", "content": output_eval},
         ]
         for conv_index, (conv, output, output_eval) in enumerate(zip(convs, outputs_ls, outputs_ls_for_eval))

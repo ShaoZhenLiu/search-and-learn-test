@@ -482,9 +482,9 @@ Always ensure clarity, correctness, and adherence to the required format."""
 VAL_MULTI_TURN_STEP_PROMPTS = {
     "turn0" : "{{ problem }} Let's think step by step and output the final answer within \\boxed{}.",
     "turn1" : """{% if correctness %}
-3. Since your initial response is self-evaluated as correct, confirm it and provide no further modifications. Put your final answer within \\boxed{}.
+Since your initial response is self-evaluated as correct, confirm it and provide no further modifications. Put your final answer within \\boxed{}.
 {% else %}
-3. Since your initial response is self-evaluated as incorrect, there might be an error in the solution above because of lack of understanding of the question. Please correct the error, if any, and rewrite the solution. Put your final answer within \\boxed{}.
+Since your initial response is self-evaluated as incorrect, there might be an error in the solution above because of lack of understanding of the question. Please correct the error, if any, and rewrite the solution. Put your final answer within \\boxed{}.
 {% endif %}""",
     "turn2" : """2. Perform a self-evaluation:
    - You may include reasoning to verify correctness.
@@ -534,6 +534,62 @@ THINK_TWICE_STEP_PROMPT = {
 The assistant’s previous answer is: <answer> {{ answer }} </answer>, and please re-answer.""",
 }
 
+MID_FINAL_GEN_STEP_PROMPT = {
+    "turn0" : "{{ problem }}",
+    "turn1" : """{% if correctness %}
+Since your initial response is self-evaluated as correct, confirm it and provide no further modifications. Put your final answer within \\boxed{}.
+{% else %}
+Since your initial response is self-evaluated as incorrect, there might be an error in the solution above because of lack of understanding of the question. Please correct the error, if any, and rewrite the solution. Put your final answer within \\boxed{}.
+{% endif %}""",
+    "turn2" : """Generate a natural transition paragraph between Solution1 and Solution2 that:
+1. Start by SPECIFICALLY referencing 1-2 key elements from Solution1 (e.g. \"Your assumption about...\" or \"The method of...\")
+2. Introduce new perspective using DIVERSE phrases like:
+   - \"But maybe if we...\" 
+   - \"Alternatively, what if...\" 
+   - \"Wait, perhaps...\" 
+   - \"Alternatively, suppose we...\"
+3. Connect to Solution2\'s CORE innovation through either:
+   - Problem reinterpretation (\"Viewing this as X instead of Y...\")
+   - Methodology shift (\"Switching from A-approach to B-approach because...\")
+   - Detail refinement (\"Focusing specifically on aspect Z that was overlooked\")
+4. Use VARIABLE-CENTRIC reasoning (\"This would better handle parameter α...\")
+5. Maintain mathematical continuity while changing perspective
+
+Forbidden patterns:
+× \"calculation errors\"/\"complexity reduction\"/\"variable elimination\" 
+× Fixed three-part structures
+× Generic methodological critiques
+
+Example transitions:
+A) \"The initial differentiation approach correctly identifies the trend, but perhaps treating the boundary conditions as dynamic constraints rather than fixed values (as done in Eq.3) would preserve more system information. Let\'s reformulate the integration parameters accordingly...\"
+
+B) \"Wait - the linear approximation in Step 2 simplifies the calculation, though maybe preserving nonlinear terms through Taylor expansion up to second order would better capture the curvature visible in Figure1. This adjustment would require...\"""",
+    "turn3" : """{{ problem }}
+
+You are a mathematics expert reviewing two candidate answers, <answer1> {{ answer1 }} </answer1> and <answer2> {{ answer2 }} </answer2>. Follow this process strictly:
+
+[Directive]
+* DO NOT solve the problem yourself
+* Only evaluate the given answers
+
+1. Validation:
+   - Check mathematical validity of both answers
+   - List specific calculation errors (if any)
+
+2. Critical Comparison:
+   - Determine which solution better satisfies the original problem's requirements
+   - Compare logical robustness and error resistance
+   - Note any simplifications/assumptions in each approach
+
+3. Final Decision:
+   - Choose the most reliable answer using \\boxed{}
+   - If equivalent validity, select the more elegant/optimal solution
+
+[Output Format]
+* Assuming you have already provided two responses and received the given results, transition naturally into the analysis section.
+* Conclude with exactly one line containing only the final answer in \\boxed{} format.
+* Keep analysis concise but rigorous.""",
+}
 
 SYSTEM_PROMPT_TYPE = {
     "best_of_n": LLAMA_MATH_SYSTEM_PROMPT,
@@ -545,6 +601,7 @@ SYSTEM_PROMPT_TYPE = {
     "diff_of_n_multi_turn": LLAMA_MATH_SYSTEM_PROMPT,
     "val_multi_turn": DEEPSEEK_MATH_SYSTEM_PROMPT,
     "think2": DEEPSEEK_MATH_SYSTEM_PROMPT,
+    "mid_fin_gen": DEEPSEEK_MATH_SYSTEM_PROMPT,
 }
 
 STEP_PROMPT_TYPE = {
@@ -557,4 +614,5 @@ STEP_PROMPT_TYPE = {
     "diff_of_n_multi_turn": DIFF_OF_N_MULTI_TURN_STEP_PROMPTS,
     "val_multi_turn": VAL_MULTI_TURN_STEP_PROMPTS,
     "think2": THINK_TWICE_STEP_PROMPT,
+    "mid_fin_gen": MID_FINAL_GEN_STEP_PROMPT,
 }

@@ -156,8 +156,9 @@ def calculate_correct_turn(dataset, turn_idx_ls):
     return
 
 def add_correct_sft_dataset_val_data(example):
-    split_words = "Wait, but let me think again."
-    pred_cot_ls = example["code"][0].split(split_words)
+    split_words = "Hold on"
+    pred_cot = example["code"][0] if example.get("code", None) is not None else example["pred_cot"]
+    pred_cot_ls = pred_cot.split(split_words)
     if len(pred_cot_ls) == 1:
         pred_cot_ls.append("")
     example["messages"] = [
@@ -176,14 +177,22 @@ def add_correct_sft_dataset_val_data(example):
     }
 
 def map_sft_val_data(dataset):
+    print("总共有的数据条数：", len(dataset))
     dataset = dataset.map(add_correct_sft_dataset_val_data, load_from_cache_file=False)
-    new_dataset = dataset.filter(lambda x: len(x["code"][0].split("Wait, but let me think again.")) == 1)
-    print(len(new_dataset))
-    print(new_dataset["idx"])
-    print(len(dataset.filter(lambda x: x["correct_turn0"] == x["correct_turn1"])))
-    new_dataset = dataset.filter(lambda x: x["correct_turn0"] == True and x["correct_turn1"] == False)
-    print(len(new_dataset))
-    print(new_dataset["idx"])
+    if dataset[0].get("code", None) is not None:
+        new_dataset = dataset.filter(lambda x: len(x["code"][0].split("Hold on")) > 1)
+    else:
+        new_dataset = dataset.filter(lambda x: len(x["pred_cot"].split("Hold on")) > 1)
+
+    print("没有通过 hold on 进行二次校验的数据条数：", len(dataset) - len(new_dataset))
+    # print(new_dataset["idx"])
+    print("使用了 hold on 后两次结果相同的数据条数：", len(new_dataset.filter(lambda x: x["correct_turn0"] == x["correct_turn1"])))
+    new_dataset1 = new_dataset.filter(lambda x: x["correct_turn0"] == True and x["correct_turn1"] == False)
+    print("使用了 hold on 后 true to false 的数据条数：", len(new_dataset1))
+    print(new_dataset1["idx"])
+    new_dataset2 = new_dataset.filter(lambda x: x["correct_turn0"] == False and x["correct_turn1"] == True)
+    print("使用了 hold on 后 false to true 的数据条数：", len(new_dataset2))
+    print(new_dataset2["idx"])
 
 def compare_ori_and_sft():
     dataset_path = "/data/shaozhen.liu/python_project/Qwen2.5-Math/evaluation/outputs/data/shaozhen.liu/python_project/hf_models/sft_models/Qwen2.5-7B-Instruct-main/math_eval/math_500/"
@@ -226,12 +235,14 @@ def compare_ori_and_sft():
 
 if __name__ == '__main__':
     # 加载数据集
-    dataset_path = "/data/shaozhen.liu/python_project/Qwen2.5-Math/evaluation/outputs/data/shaozhen.liu/python_project/hf_models/sft_models/Qwen2.5-7B-Instruct-main/math_eval/math_500/"
-    data_file_name = "test_qwen25-math-cot_-1_seed0_t0.6_s0_e-1.jsonl"
+    dataset_path = "/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data/DeepScaler-QwQ_32b/mid_fin_gen"
+    data_file_name = "bon_completions_s0_e10000_acc73.42999999999999_04101519.jsonl"
     dataset = load_dataset(dataset_path, data_files=data_file_name, split='train')
     print(dataset)
 
-    map_sft_val_data(dataset)
+    calculate_correct_turn(dataset, turn_idx_ls=[2,4,-1])
+
+    # map_sft_val_data(dataset)
 
     # dataset.to_json(f"{dataset_path}/{data_file_name}")
 
