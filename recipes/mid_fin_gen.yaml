@@ -1,0 +1,29 @@
+# refer to src/sal/config.py for more options
+
+filter_duplicates: true
+approach: mid_fin_gen
+search_batch_size: 20000
+
+dataset_start: 0
+dataset_end: 10000  # 20000
+
+n: 8  # avg 8
+seed: 0
+
+temperature: 0.7
+top_p: 0.95
+max_tokens: 32768
+
+# 16k
+model_path: /apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/models/Qwen2.5-7B-Instruct
+#model_path: /data/shaozhen.liu/python_project/hf_models/sft_models/Qwen2.5-7B-Instruct/  # 这个是微调版本的模型，如果需要测试再用它
+dataset_name: /apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data/DeepScaler-QwQ_32b
+dataset_files: distilled_s0_e20000_20250309005632_final.json
+output_dir: /apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data/DeepScaler-QwQ_32b/mid_fin_gen
+# output_dir: /mnt/private_berlinni/liushaozhen/data/mid_fin_gen
+
+# 20k
+# model_path: /apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/models/Qwen2.5-7B-Instruct
+# dataset_name: /apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data/DeepScaler-QwQ_32b
+# dataset_files: distilled_s0_e20000_20250309005632.jsonl
+# output_dir: /apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data/DeepScaler-QwQ_32b/multi_turn_results_20k
