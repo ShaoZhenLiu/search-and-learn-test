@@ -1,0 +1,24 @@
+# refer to src/sal/config.py for more options
+
+filter_duplicates: true
+approach: rej_sample
+search_batch_size: 20000
+
+#dataset_start: 10000
+#dataset_end: 12500
+dataset_start: 12500
+dataset_end: 15000
+
+n: 1  # avg 8
+seed: 0
+
+temperature: 0.7
+top_p: 0.95
+max_tokens: 20480
+
+# 16k
+#model_path: /data/shaozhen.liu/python_project/hf_models/Qwen2.5-7B-Instruct/
+model_path: /data/shaozhen.liu/python_project/hf_models/sft_models/Qwen2.5-7B-Instruct-cotv2/  # 这个是微调版本的模型，如果需要测试再用它
+dataset_name: /data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-distilled-32b/
+dataset_files: train-distilled_subset16k.jsonl
+output_dir: /data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-7b-rej_sample_data

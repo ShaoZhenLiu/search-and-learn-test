@@ -27,7 +27,7 @@ from sal.utils.hub import get_dataset_revisions
 class Config:
     approach: Literal[
         "best_of_n", "beam_search", "dvts", "iter_gen", "diff_of_n", "diff_of_n_multi_turn", "iter_gen_multi_turn",
-        "val_multi_turn", "think2", "mid_fin_gen"
+        "val_multi_turn", "think2", "mid_fin_gen", "rej_sample", "tts"
     ] = "val_multi_turn"
     model_path: str = "/data/shaozhen.liu/python_project/hf_models/gemma-2-27b-it/"
     gpu_memory_utilization: float = 0.9

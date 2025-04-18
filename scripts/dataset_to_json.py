@@ -71,12 +71,51 @@ def format_data_7b(example):
 
 
 def classify_answers(ans1, ans2, gt_ans):
+    if ans2 is None:
+        return _sal_reward_fn(ans1, gt_ans)
     ans1_correct, ans2_correct = _sal_reward_fn(ans1, gt_ans), _sal_reward_fn(ans2, gt_ans)
     # ans1_correct = "correct" if ans1_correct == True else "error"
     # ans2_correct = "correct" if ans2_correct == True else "error"
     return f"{ans1_correct}-to-{ans2_correct}"
 
-def format_error_correct(error_resp, eval_resp, correct_resp, conc_resp):
+def verify_string_handling(verify_str, gt):
+    gt_string = "[VERIFY] wrong." if gt == False else "[VERIFY] correct."
+    if len(verify_str) > 20:
+        if "[VERIFY] wrong." in verify_str:
+            verify_str_ls = verify_str.replace(
+                "\\boxed{\\text{[VERIFY] wrong.}}", "[VERIFY] wrong."
+            ).replace(
+                "\\boxed{[VERIFY] wrong.}", "[VERIFY] wrong."
+            ).split("[VERIFY] wrong.")
+            if len(verify_str_ls) == 2:
+                verify_str = verify_str_ls[0] if len(verify_str_ls[0]) >= len(verify_str_ls[1]) else verify_str_ls[1]
+                # verify_str = verify_str.strip() + f"\n{gt_string}"
+                verify_str = verify_str.strip() + "\n[VERIFY] wrong."
+            else:
+                verify_str = gt_string
+        elif "[VERIFY] correct." in verify_str:
+            verify_str_ls = verify_str.replace(
+                "\\boxed{\\text{[VERIFY] correct.}}", "[VERIFY] correct."
+            ).replace(
+                "\\boxed{[VERIFY] correct.}", "[VERIFY] correct."
+            ).split("[VERIFY] correct.")
+            if len(verify_str_ls) == 2:
+                verify_str = verify_str_ls[0] if len(verify_str_ls[0]) >= len(verify_str_ls[1]) else verify_str_ls[1]
+                # verify_str = verify_str.strip() + f"\n{gt_string}"
+                verify_str = verify_str.strip() + "\n[VERIFY] correct."
+            else:
+                verify_str = gt_string
+    else:
+        verify_str = gt_string
+    return verify_str
+
+def format_error_correct(error_resp, eval_resp, correct_resp, conc_resp=None):
+    if conc_resp is None:
+        return (
+            f"{error_resp}\n\n"
+            f"{eval_resp}\n\n"
+            f"{correct_resp}"
+        )
     return (
         f"{error_resp}\n\n"
         f"{eval_resp}\n\n"
@@ -84,9 +123,15 @@ def format_error_correct(error_resp, eval_resp, correct_resp, conc_resp):
         f"{conc_resp}"
     )
 
-def format_correct_correct(resp1, eval_resp, resp2, conc_resp):
+def format_correct_correct(resp1, eval_resp, resp2, conc_resp=None):
     if resp2[:6] == "\\boxed" or len(resp2) < 20:
         return f"{resp1}"
+    if conc_resp is None:
+        return (
+            f"{resp1}\n\n"
+            f"{eval_resp}\n\n"
+            f"{resp2}"
+        )
     return (
         f"{resp1}\n\n"
         f"{eval_resp}\n\n"
@@ -106,14 +151,15 @@ def format_message_from_multi_turn(example):
     # system_prompt = example["messages"][0][0]["content"]
 
     assistant_content_ls, correct_type_ls = [], []
-    for msg in example["messages"]:
+    for idx, msg in enumerate(example["messages"]):
 
         ans_turn1 = msg[2]["content"]
         eval_turn = msg[6]["content"]
         ans_turn2 = msg[4]["content"]
-        conc_turn = msg[8]["content"]
+        conc_turn = msg[8]["content"] if len(msg) >= 8 else None
 
         correct_type = classify_answers(ans_turn1, ans_turn2, gt_ans=answer)
+        eval_turn = verify_string_handling(eval_turn, example["evaluate_turn_ls"][idx])
 
         global c_c, c_e, e_e, e_c
         if correct_type == "False-to-True":  # 关键
@@ -143,10 +189,21 @@ def format_message_from_multi_turn(example):
         "correct_turn_ls": correct_type_ls,
     }
 
+def format_message_from_single_turn(example):
+    answer = example["answer"] if example.get("answer", None) is not None else example["gt"]
+    assistant_content_ls, correct_type_ls = [], []
+    for idx, msg in enumerate(example["messages"]):
+        resp = msg[2]["content"]
+        if classify_answers(resp, ans2=None, gt_ans=answer):  # 只保留回答正确的
+            assistant_content_ls.append(resp)
+    return {
+        "multi_turn_message": assistant_content_ls,
+    }
+
 def sft_data_for_mid_fin_gen():
     # 加载数据集
-    dataset_path = "/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data/DeepScaler-QwQ_32b/mid_fin_gen"
-    data_file_name = "bon_completions_s0_e10000_accNone_04101519.jsonl"
+    dataset_path = "/data/shaozhen.liu/python_project/hf_datasets/val_multi_turn"
+    data_file_name = "bon_completions_s0_e10000_acc17.4025_04101305.jsonl"
     dataset = load_dataset(dataset_path, data_files=data_file_name, split='train')
     print(dataset)
     c_c, c_e, e_e, e_c = 0, 0, 0, 0
@@ -172,66 +229,8 @@ def sft_data_for_mid_fin_gen():
     # dataset.to_json(f"{dataset_path}/{data_file_name}")
     list_dict = []
     for example in dataset:
-        for message, correct_turn in zip(example['new_messages'], example['correct_turn_ls']):
-            if correct_turn == "False-to-False":
-                continue
-            list_dict.append({
-                'messages': message,
-                'correct_turn': correct_turn,
-            })
-
-    # 分离 True-to-True 和 False-to-True 的数据
-    true_to_true = [d for d in list_dict if d['correct_turn'] == 'True-to-True']
-    false_to_true = [d for d in list_dict if d['correct_turn'] == 'False-to-True']
-    other_data = [d for d in list_dict if d['correct_turn'] == 'True-to-False']
-
-    # False-to-True 和 True-to-False + True-to-True 一样多，
-    min_count = min(len(true_to_true), len(false_to_true)) // 2
-    random.seed(0)
-    sampled_true_single = random.sample(true_to_false, min(len(true_to_false), len(false_to_true) // 2))
-    sampled_true_to_true = random.sample(true_to_true, max(len(false_to_true) // 2, len(false_to_true) - len(true_to_false)))
-
-    print(len(sampled_true_to_true), len(false_to_true), len(sampled_true_single))
-    filtered_list = sampled_true_to_true + false_to_true + sampled_true_single
-    filtered_list = [{'messages': d['messages']} for d in filtered_list]
-    random.shuffle(filtered_list)
-
-    # 保存为 JSON 文件
-    with open(f"{dataset_path}/llama-factory-sft-format.json", "w", encoding="utf-8") as f:
-        json.dump(filtered_list, f, ensure_ascii=False, indent=2)
-
-
-if __name__ == '__main__':
-    # 加载数据集
-    dataset_path = "/apdcephfs_sh3/share_302139670/hunyuan/berlinni/liushaozhen/data/DeepScaler-QwQ_32b/mid_fin_gen"
-    data_file_name = "bon_completions_s0_e10000_acc73.42999999999999_04101519.jsonl"
-    dataset = load_dataset(dataset_path, data_files=data_file_name, split='train')
-    print(dataset)
-    c_c, c_e, e_e, e_c = 0, 0, 0, 0
-    dataset = dataset.map(
-        format_message_from_multi_turn,
-        batched=False,
-        desc="generate training example",
-        load_from_cache_file=False,
-    )
-    # dataset = dataset.filter(lambda x: len(x["multi_turn_message"]) != 0)
-    print(dataset)
-    print("correct to correct:", c_c)
-    print("correct to error:", c_e)
-    print("error to correct:", e_c)
-    print("error to error:", e_e)
-    dataset = dataset.map(
-        format_data_7b,
-        batched=False,
-        desc="format data",
-        load_from_cache_file=False,
-    )
-
-    # dataset.to_json(f"{dataset_path}/{data_file_name}")
-    list_dict = []
-    for example in dataset:
-        for message, correct_turn in zip(example['new_messages'], example['correct_turn_ls']):
-            if correct_turn == "False-to-False":
+        for idx, (message, correct_turn) in enumerate(zip(example['new_messages'], example['correct_turn_ls'])):
+            if correct_turn == "False-to-False" or example['evaluate_turn_ls'][idx] == False:
                 continue
             list_dict.append({
                 'messages': message,
@@ -247,7 +246,8 @@ if __name__ == '__main__':
     min_count = len(false_to_true)
     random.seed(0)
     sampled_true_single = random.sample(true_to_false, min(len(true_to_false), len(false_to_true) // 2))
-    sampled_true_to_true = random.sample(true_to_true, max(len(false_to_true) // 2, len(false_to_true) - len(true_to_false)))
+    sampled_true_to_true = random.sample(true_to_true,
+                                         max(len(false_to_true) // 2, len(false_to_true) - len(true_to_false)))
 
     print(len(sampled_true_to_true), len(false_to_true), len(sampled_true_single))
     filtered_list = sampled_true_to_true + false_to_true + sampled_true_single
@@ -258,3 +258,34 @@ if __name__ == '__main__':
     with open(f"{dataset_path}/llama-factory-sft-format.json", "w", encoding="utf-8") as f:
         json.dump(filtered_list, f, ensure_ascii=False, indent=2)
 
+
+if __name__ == '__main__':
+    # 加载数据集
+    dataset_path = "/data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-7b-rej_sample_data/turn1"
+    data_file_name = "merged_dataset.jsonl"
+    dataset = load_dataset(dataset_path, data_files=data_file_name, split='train')
+    print(dataset)
+    dataset = dataset.map(
+        format_message_from_single_turn,
+        batched=False,
+        desc="generate training example",
+        load_from_cache_file=False,
+    )
+    dataset = dataset.map(
+        format_data_7b,
+        batched=False,
+        desc="format data",
+        load_from_cache_file=False,
+    )
+    list_dict = []
+    for example in dataset:
+        for idx, (message) in enumerate(example['new_messages']):
+            list_dict.append({
+                'messages': message,
+            })
+    random.seed(0)
+    random.shuffle(list_dict)
+    print(len(list_dict))
+    # 保存为 JSON 文件.
+    with open(f"{dataset_path}/llama-factory-sft-format.json", "w", encoding="utf-8") as f:
+        json.dump(list_dict, f, ensure_ascii=False, indent=2)

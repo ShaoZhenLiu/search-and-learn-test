@@ -1,7 +1,7 @@
 # refer to src/sal/config.py for more options
 
 filter_duplicates: true
-approach: iter_gen_multi_turn
+approach: tts
 search_batch_size: 20000
 #dataset_start: 0
 #dataset_end: 10
@@ -14,7 +14,7 @@ max_tokens: 32768
 
 # 16k
 #model_path: /data/shaozhen.liu/python_project/hf_models/Qwen2.5-32B-Instruct/
-model_path: /data/shaozhen.liu/python_project/hf_models/sft_models/Qwen2.5-7B-Instruct/
+model_path: /data/shaozhen.liu/python_project/hf_models/sft_models/Qwen2.5-7B-Instruct-cotv2/
 #dataset_name: /data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-distilled-32b/
 #dataset_files: train-distilled_subset16k.jsonl
 #output_dir: /data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-1k-7b-sft

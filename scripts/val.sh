@@ -1,9 +1,12 @@
 #!/bin/bash
 set -ex
 
-export CUDA_VISIBLE_DEVICES=3
+export CUDA_VISIBLE_DEVICES=0
 export VLLM_WORKER_MULTIPROC_METHOD=spawn
 
+DATASET_DIR="/data/shaozhen.liu/python_project/Qwen2.5-Math/evaluation/data"
+OUTPUT_DIR="/data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-math_eval"
+#DATA_NAME=("math_500" "gsm8k" "svamp" "asdiv" "mawps" "carp_en" "tabmwp" "minerva_math" "gaokao2023en" "olympiadbench" "college_math")
 DATA_NAME=("math_500" "gsm8k" "svamp" "asdiv" "mawps" "carp_en" "tabmwp" "minerva_math" "gaokao2023en" "olympiadbench" "college_math")
 
 for ((i=0; i<${#DATA_NAME[@]}; i++))
@@ -11,9 +14,9 @@ do
   echo "=================== Processing dataset: ${DATA_NAME[i]} ==================="
   python scripts/test_time_compute.py \
     recipes/val.yaml \
-    --dataset_name="/data/shaozhen.liu/python_project/Qwen2.5-Math/evaluation/data/${DATA_NAME[i]}" \
+    --dataset_name="${DATASET_DIR}/${DATA_NAME[i]}" \
     --dataset_files="test.jsonl" \
-    --output_dir="/data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-1k-7b-sft/${DATA_NAME[i]}" \
+    --output_dir="${OUTPUT_DIR}/${DATA_NAME[i]}" \
     --n=1 \
     2>&1 | tee -a "log/val_7b_${DATA_NAME[i]}.log"
 done

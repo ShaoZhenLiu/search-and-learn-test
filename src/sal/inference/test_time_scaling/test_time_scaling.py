@@ -32,10 +32,10 @@ from sal.config import Config
 logger = logging.getLogger()
 from sal.utils.rewards.math_reward import _sal_reward_fn
 from sal.utils.rewards.math_utils import extract_answer, parse_ground_truth, parse_question
-from .utils import vllm_generate, generate_convs, agg_data
+from ..utils import vllm_generate, agg_data
 
 
-def _iterative_generate_multi_turn(batch_of_prompts, answers, config: Config, llm: LLM) -> dict:
+def _test_time_scaling_think2(batch_of_prompts, answers, config: Config, llm: LLM) -> dict:
     convs = [
         [
             {"role": "system", "content": config.system_prompt},
@@ -44,10 +44,37 @@ def _iterative_generate_multi_turn(batch_of_prompts, answers, config: Config, ll
         for p_index, problem in enumerate(batch_of_prompts) for _ in range(config.n)  # n==8，即每个问题生成8轮对话，正确性取平均
     ]  # 构建对话 prompt
     token_len_ls = []
+    backup_convs = convs[:]
 
-    for i in range(1, 3):
-        convs, output_token_ls = generate_convs(convs, prompt_index=i, config=config, llm=llm, answers=answers)
+    def generate_convs(old_convs, prompt_index):
+        responses, outputs_ls, output_token_ls = vllm_generate(old_convs, config, llm)
         token_len_ls.append(output_token_ls)
+        new_convs = [
+            [
+                {"role": "system", "content": config.system_prompt},
+                {"role": "user", "content": Template(config.step_prompt[f"turn{prompt_index}"]).render(
+                    problem=conv[1]["content"],
+                    answer=extract_answer(output),
+                )},
+            ]
+            for conv_index, (conv, output) in enumerate(zip(old_convs, outputs_ls))
+        ]
+        nonlocal backup_convs
+        backup_convs = [
+            [
+                *conv,
+                {"role": "assistant", "content": output},
+                {"role": "user", "content": Template(config.step_prompt[f"turn{prompt_index}"]).render(
+                    problem=conv[1]["content"],
+                    answer=extract_answer(output),
+                )},
+            ]
+            for conv_index, (conv, output) in enumerate(zip(backup_convs, outputs_ls))
+        ]
+        return new_convs
+
+    for i in range(1, len(config.step_prompt)):
+        convs = generate_convs(convs, prompt_index=i)
     responses, outputs_ls, output_token_ls = vllm_generate(convs, config, llm)  # 得到最终的答案
     token_len_ls.append(output_token_ls)
     final_convs = [
@@ -55,7 +82,7 @@ def _iterative_generate_multi_turn(batch_of_prompts, answers, config: Config, ll
             *conv,
             {"role": "assistant", "content": output},
         ]
-        for conv_index, (conv, output) in enumerate(zip(convs, outputs_ls))
+        for conv_index, (conv, output) in enumerate(zip(backup_convs, outputs_ls))
     ]
 
     # 将token_len的形状从 [4, batch] 变成 [batch, 4]
@@ -71,7 +98,7 @@ def _iterative_generate_multi_turn(batch_of_prompts, answers, config: Config, ll
     return step_result
 
 
-def iterative_generate_multi_turn(examples, config: Config, llm: LLM):
+def test_time_scaling(examples, config: Config, llm: LLM):
     """
     examples: 根据 config.search_batch_size 调整里面的个数，默认为25
     """
@@ -81,7 +108,7 @@ def iterative_generate_multi_turn(examples, config: Config, llm: LLM):
 
     problems = [parse_question(example, dataset_name) for example in examples_ls]
     answers = [parse_ground_truth(example, dataset_name)[1]  for example in examples_ls]
-    step_result = _iterative_generate_multi_turn(problems, answers, config, llm)
+    step_result = _test_time_scaling_think2(problems, answers, config, llm)
 
     if config.calculate_correct:
         correct_ls = [

@@ -21,6 +21,7 @@ from tqdm.auto import tqdm
 from transformers import HfArgumentParser
 
 from sal.utils.hub import get_dataset_revisions
+from sal.utils.data import get_json_files
 
 """Merge revisions of a dataset into a single config.
 
@@ -39,9 +40,11 @@ python scripts/merge_chunks.py \
 
 @dataclass
 class Args:
-    dataset_name: str
+    dataset_name: str = "/data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-7b-rej_sample_data/turn1/"
     dataset_split: str = "train"
     filter_strings: List[str] = field(default_factory=list)
+    download_from_remote: bool = False
+    push_to_hub: bool = False
 
 
 def load_single_revision(args):
@@ -56,9 +59,7 @@ def load_single_revision(args):
     )
 
 
-def main():
-    parser = HfArgumentParser(Args)
-    args = parser.parse_args_into_dataclasses()[0]
+def prepare_remote_data(args):
     revisions = get_dataset_revisions(args.dataset_name)
 
     if args.filter_strings:
@@ -86,27 +87,83 @@ def main():
             )
         )
 
+    return datasets, merged_config
+
+
+
+def load_single_local_file(args):
+    """加载本地的一个json或jsonl文件"""
+    dataset_path, data_file, dataset_split = args
+    return load_dataset(
+        dataset_path,
+        data_files=data_file,
+        split=dataset_split,
+    )
+
+
+def prepare_local_data(args):
+    files_ls = get_json_files(args.dataset_name)
+    args.filter_strings = ["bon_completions"]
+
+    if args.filter_strings:
+        files_ls = [
+            file_name
+            for file_name in files_ls
+            if all(filter_string in file_name for filter_string in args.filter_strings)
+        ]
+
+    merged_config = files_ls[0].split("_s")[0]
+    print(files_ls)
+    print(f"Merging {len(files_ls)} revisions to create config `{merged_config}`")
+
+    # Prepare arguments for multiprocessing
+    pool_args = [
+        (args.dataset_name, file, args.dataset_split) for file in files_ls
+    ]
+    # print(pool_args)
+
+    # Use multiprocessing to load datasets in parallel
+    with Pool(cpu_count()) as pool:
+        datasets_ls = list(
+            tqdm(
+                pool.imap(load_single_local_file, pool_args),
+                total=len(files_ls),
+                desc="Loading datasets",
+            )
+        )
+
+    # datasets_ls = [load_single_local_file(arg) for arg in pool_args]
+
+    return datasets_ls, merged_config
+
+def main():
+    parser = HfArgumentParser(Args)
+    args = parser.parse_args_into_dataclasses()[0]
+
+    if args.download_from_remote:
+        datasets, merged_config = prepare_remote_data(args)
+    else:
+        print("merge local data")
+        datasets, merged_config = prepare_local_data(args)
+
     # Concatenate datasets
+    print("start concatenate dataset")
     merged_dataset = concatenate_datasets(datasets)
 
     # Sanity check
-    if "problem" in merged_dataset.column_names and len(
-        merged_dataset.unique("problem")
-    ) != len(merged_dataset):
-        raise ValueError("Found duplicate problems")
-    if "lighteval_MATH" in merged_config and len(merged_dataset) != 5000:
-        raise ValueError(f"Expected 5000 samples, got {len(merged_dataset)}")
-    if "MATH-500" in merged_config and len(merged_dataset) != 500:
-        raise ValueError(f"Expected 500 samples, got {len(merged_dataset)}")
+    print(merged_dataset)
 
-    # Push merged dataset to the hub
-    url = merged_dataset.push_to_hub(
-        args.dataset_name,
-        config_name=merged_config,
-        split=args.dataset_split,
-        private=True,
-    )
-    print(f"Pushed merged dataset to {url}")
+    if args.push_to_hub:
+        # Push merged dataset to the hub
+        url = merged_dataset.push_to_hub(
+            args.dataset_name,
+            config_name=merged_config,
+            split=args.dataset_split,
+            private=True,
+        )
+        print(f"Pushed merged dataset to {url}")
+    else:
+        merged_dataset.to_json(f"{args.dataset_name}/merged_dataset.jsonl")
 
 
 if __name__ == "__main__":

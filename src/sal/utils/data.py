@@ -10,6 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import logging
 import time
 from pathlib import Path
@@ -73,6 +74,49 @@ def save_dataset(dataset, config, acc=None, file_name=None):
         if config.output_dir is None:
             config.output_dir = f"data/{config.model_path}"
         Path(config.output_dir).mkdir(parents=True, exist_ok=True)
-        target_file = file_name if file_name is not None else f"{config.output_dir}/bon_completions_s{config.dataset_start}_e{config.dataset_end}_acc{acc}_{date_time}.jsonl"
+        target_file = file_name if file_name is not None else f"{config.output_dir}/bon_completions_s{config.dataset_start}_e{config.dataset_end}_n{config.n}_len{len(dataset)}_acc{acc}_{date_time}.jsonl"
         dataset.to_json(target_file, lines=True)
         logger.info(f"Saved completions to {target_file}")
+
+
+def get_json_files(directory):
+    """
+    获取指定路径下所有JSON和JSONL文件的路径列表
+
+    参数：
+    directory (str): 要搜索的目录路径，也可以是文件路径
+
+    返回：
+    list: 包含所有匹配文件路径的列表，找不到文件时返回空列表
+    """
+    json_files = []
+
+    # 检查路径是否存在
+    if not os.path.exists(directory):
+        return json_files
+
+    # 处理单个文件的情况
+    if os.path.isfile(directory):
+        if directory.lower().endswith(('.json', '.jsonl')):
+            return [directory]
+        return json_files
+
+    # 遍历目录树
+    for root, _, files in os.walk(directory):
+        for file in files:
+            # 不区分大小写检查扩展名
+            if file.lower().endswith(('.json', '.jsonl')):
+                # full_path = os.path.join(root, file)
+                # json_files.append(full_path)
+                json_files.append(file)
+
+    return json_files
+
+
+# 使用示例
+if __name__ == "__main__":
+    target_path = "/data/shaozhen.liu/python_project/hf_datasets/DeepScaleR-7b-rej_sample_data/"  # 替换为你的目标路径
+    result = get_json_files(target_path)
+    print("找到的JSON/JSONL文件：")
+    for file in result:
+        print(file)

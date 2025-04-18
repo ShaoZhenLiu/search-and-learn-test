@@ -591,6 +591,12 @@ You are a mathematics expert reviewing two candidate answers, <answer1> {{ answe
 * Keep analysis concise but rigorous.""",
 }
 
+TEST_TIME_SCALING = {
+    "turn0": "{{ problem }}",
+    "turn1": """{{ problem }}
+The assistant’s previous answer is: <answer> {{ answer }} </answer>, and please re-answer.""",
+}
+
 SYSTEM_PROMPT_TYPE = {
     "best_of_n": LLAMA_MATH_SYSTEM_PROMPT,
     "beam_search": LLAMA_MATH_SYSTEM_PROMPT,
@@ -602,6 +608,8 @@ SYSTEM_PROMPT_TYPE = {
     "val_multi_turn": DEEPSEEK_MATH_SYSTEM_PROMPT,
     "think2": DEEPSEEK_MATH_SYSTEM_PROMPT,
     "mid_fin_gen": DEEPSEEK_MATH_SYSTEM_PROMPT,
+    "rej_sample": DEEPSEEK_MATH_SYSTEM_PROMPT,
+    "tts": DEEPSEEK_MATH_SYSTEM_PROMPT,
 }
 
 STEP_PROMPT_TYPE = {
@@ -615,4 +623,6 @@ STEP_PROMPT_TYPE = {
     "val_multi_turn": VAL_MULTI_TURN_STEP_PROMPTS,
     "think2": THINK_TWICE_STEP_PROMPT,
     "mid_fin_gen": MID_FINAL_GEN_STEP_PROMPT,
+    "rej_sample": None,
+    "tts": TEST_TIME_SCALING,
 }

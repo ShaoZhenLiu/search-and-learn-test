@@ -32,6 +32,8 @@ from sal.inference import (
     think_twice,
     middle_final_generate,
 )
+from sal.inference.rejection_sampling import do_rejection_sampling
+from sal.inference.test_time_scaling import test_time_scaling
 from sal.inference.direct_gen import VLLMServerManager
 from sal.utils.data import get_dataset, save_dataset
 from sal.utils.parser import H4ArgumentParser
@@ -55,6 +57,7 @@ APPROACHES = {
     "val_multi_turn": multi_turn_with_validate,
     "think2": think_twice,
     "mid_fin_gen": middle_final_generate,
+    "tts": test_time_scaling,
 }
 
 
@@ -63,8 +66,8 @@ def main():
     config = parser.parse()
 
     print(config.approach)
-    print("step_prompt length:", len(config.step_prompt))
-    approach_fn = APPROACHES[config.approach]  # 根据不同的搜索策略，选择不同的搜索函数
+    if config.step_prompt is not None:
+        print("step_prompt length:", len(config.step_prompt))
 
     num_gpus = torch.cuda.device_count()
     print('available gpu number:', num_gpus)
@@ -78,9 +81,9 @@ def main():
         enable_prefix_caching=True,
         seed=config.seed,
         tensor_parallel_size=num_gpus,
+        enforce_eager=True,
         # max_num_seqs=1024,  # 一次最多生成512个序列
     )
-    # prm = None if config.approach in ["iter_gen", "diff_of_n", "iter_gen_multi_turn", "diff_of_n_multi_turn", "val_multi_turn", "think2"] else load_prm(config)
 
     dataset = get_dataset(config)
 
@@ -89,18 +92,17 @@ def main():
             print("change dtype to float32")
             dataset = dataset.cast_column("correct", Value("float32"))
 
-    # 首先生成特定的解和 prm 的打分，保存到 dataset 里面
-    dataset = dataset.map(
-        approach_fn,
-        batched=True,
-        batch_size=config.search_batch_size,
-        fn_kwargs={"config": config, "llm": llm},
-        # fn_kwargs={"config": config, "llm": llm} if config.approach in \
-        #                                             ["iter_gen", "diff_of_n", "iter_gen_multi_turn", "diff_of_n_multi_turn", "val_multi_turn", "think2"] \
-        #                                          else {"config": config, "llm": llm, "prm": prm},
-        desc="Running search",
-        load_from_cache_file=False,
-    )
+    if config.approach not in ["rej_sample"]:
+        dataset = dataset.map(
+            APPROACHES[config.approach],
+            batched=True,
+            batch_size=config.search_batch_size,
+            fn_kwargs={"config": config, "llm": llm},
+            desc="Running search",
+            load_from_cache_file=False,
+        )
+    else:
+        dataset = do_rejection_sampling(dataset=dataset, llm=llm, config=config)
 
     save_dataset(dataset, config)
 
@@ -109,7 +111,7 @@ def main():
     acc = None
     if config.calculate_correct:
         # dataset, acc = sal_reward_fn(dataset, config)  # 判断输出正误，同时，过滤掉错误的数据
-        acc = sum(dataset["correct"]) / len(dataset) * 100
+        acc = sum(dataset["correct"]) / len(dataset) * 100 if len(dataset) != 0 else 0
         logger.info(f"模型生成答案的准确性为: {acc}%")
 
     if config.approach == "diff_of_n":
