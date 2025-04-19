@@ -21,7 +21,7 @@ from setuptools import find_packages, setup
 extras = {}
 extras["quality"] = ["ruff", "isort"]
 extras["tests"] = ["pytest"]
-extras["dev"] = ["vllm>=0.6.5"] + extras["quality"] + extras["tests"]
+extras["dev"] = ["vllm"] + extras["quality"] + extras["tests"]
 
 
 install_requires = [
